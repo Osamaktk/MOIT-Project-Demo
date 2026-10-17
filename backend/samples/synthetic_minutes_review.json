@@ -1,0 +1,23 @@
+[
+  {
+    "start": 0.0,
+    "end": 5.18,
+    "text": "This is the transaction review meeting. We are discussing TX-A.",
+    "lang": "en",
+    "speaker": null
+  },
+  {
+    "start": 5.18,
+    "end": 12.81,
+    "text": "The Director will send the updated review pack to the Chief of Staff by October twenty first, twenty twenty six.",
+    "lang": "en",
+    "speaker": null
+  },
+  {
+    "start": 12.81,
+    "end": 21.27,
+    "text": "The Chief of Staff asks the Liaison to confirm the next milestone for TX-A by October twenty third, twenty twenty six.",
+    "lang": "en",
+    "speaker": null
+  }
+]

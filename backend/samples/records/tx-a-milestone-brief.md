@@ -1,0 +1,1 @@
+Synthetic summary of the TX-A advisory and transaction milestones. The transaction is in the due diligence stage. The next milestone is review of the updated diligence pack by 25 October 2026. The Transformation and Delivery director coordinates the pack and the Liaison confirms milestone readiness. This demonstration briefing contains no real Commission data.

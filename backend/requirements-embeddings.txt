@@ -1,0 +1,2 @@
+# Optional local semantic retrieval. The selected model is downloaded on first use.
+sentence-transformers>=3.3,<6

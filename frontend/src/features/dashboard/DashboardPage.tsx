@@ -1,0 +1,65 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Activity, ArrowDownRight, ArrowUpRight, Building2, CalendarDays, FileClock, Printer, UsersRound, X } from 'lucide-react'
+import { getDashboard, getDashboardDrill, type DrillRecord } from '../../lib/api'
+
+function dateLabel(value: string, language = 'en'): string {
+  return new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', { day: '2-digit', month: 'short' }).format(new Date(`${value.slice(0, 10)}T00:00:00`))
+}
+
+function dateTimeLabel(value: string, language = 'en'): string {
+  return new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+}
+
+function stageLabel(value: string, language = 'en', translate?: (key: string) => string): string {
+  if (language === 'ur' && translate) return translate(`stage.${value}`)
+  return value.replaceAll('_', ' ')
+}
+
+export default function DashboardPage() {
+  const { t, i18n } = useTranslation()
+  const [weekEnding, setWeekEnding] = useState('')
+  const [drill, setDrill] = useState<{ kpi: string; stage?: string } | null>(null)
+  const dashboard = useQuery({ queryKey: ['dashboard', weekEnding], queryFn: () => getDashboard(weekEnding || undefined) })
+  const selectedWeek = weekEnding || dashboard.data?.week_ending || ''
+  const navigate = useNavigate()
+  const kpis = dashboard.data?.kpis
+  const stageCounts = dashboard.data?.transactions_by_stage.map(stage => ({ ...stage, label: stageLabel(stage.stage, i18n.language, t) })) ?? []
+  const metrics = [
+    { key: 'transactions_in_process', label: t('dashboard.transactions'), value: kpis?.transactions_in_process, icon: Building2, color: 'navy', note: t('dashboard.transactionsNote') },
+    { key: 'decisions_due_this_week', label: t('dashboard.decisions'), value: kpis?.decisions_due_this_week, icon: FileClock, color: 'gold', note: t('dashboard.awaitingDecision') },
+    { key: 'actions_overdue', label: t('dashboard.overdue'), value: kpis?.actions_overdue, icon: Activity, color: 'red', note: t('dashboard.overdueNote') },
+    { key: 'engagements_this_week', label: t('dashboard.engagements'), value: kpis?.engagements_this_week, icon: UsersRound, color: 'teal', note: t('dashboard.engagementsNote') },
+  ]
+  function openRecord(record: DrillRecord) {
+    if (record.record_type === 'transaction' && record.code) navigate(`/transactions/${record.code}`)
+    else if (record.record_type === 'register_entry') navigate('/register')
+    else if (record.record_type === 'minister_decision') navigate('/decisions')
+    else if (record.record_type === 'engagement') navigate('/engagements')
+    setDrill(null)
+  }
+
+  return <div className="dashboard-page">
+    <div className="welcome-row"><div><div className="eyebrow">{t('dashboard.delivery')}</div><h1>{t('shell.commandCenter')}</h1><p>{t('dashboard.summary')}</p></div><div className="dashboard-controls"><label><CalendarDays size={15}/> {t('dashboard.weekEnding')}<input aria-label={t('dashboard.weekEnding')} type="date" value={selectedWeek} onChange={event => setWeekEnding(event.target.value)}/></label><button className="outline-button print-button" onClick={() => window.print()}><Printer size={15}/> {t('dashboard.print')}</button></div></div>
+    {dashboard.isError && <div className="dashboard-error" role="alert">{dashboard.error.message}<button onClick={() => void dashboard.refetch()}>{t('dashboard.retry')}</button></div>}
+    <div className="dashboard-kpis">{metrics.map(({key,label,value,icon:Icon,color,note})=><button className={`dashboard-kpi ${color}`} key={key} onClick={() => setDrill({kpi:key})} disabled={dashboard.isPending}><span className="dashboard-kpi-head"><span>{label}</span><Icon size={17}/></span><strong>{dashboard.isPending ? '—' : value ?? 0}</strong><small>{note}</small><span className="kpi-open">{t('dashboard.openRecords')} <ArrowUpRight size={12}/></span></button>)}</div>
+    <div className="dashboard-grid"><section className="dashboard-card stage-card"><div className="dashboard-card-head"><div><span className="eyebrow">{t('dashboard.pipeline')}</span><h2>{t('dashboard.byStage')}</h2></div><span className="data-chip">{kpis?.transactions_in_process ?? '—'} {t('dashboard.active')}</span></div>{dashboard.data && <><div className="stage-chart" role="img" aria-label={t('dashboard.stageChartLabel')}><ResponsiveContainer aria-hidden="true" width="100%" height="100%"><BarChart data={stageCounts} margin={{ top: 12, right: 8, left: -18, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8edf3"/><XAxis dataKey="label" tick={{ fontSize: 8, fill: '#526176' }} interval={0} angle={-18} textAnchor="end" height={56}/><YAxis allowDecimals={false} tick={{ fontSize: 8, fill: '#526176' }}/><Tooltip formatter={(value) => [t('dashboard.transactionCount', { count: String(value ?? 0) }), t('dashboard.count')]} cursor={{ fill: '#f1f5f9' }}/><Bar dataKey="count" fill="#0e7c86" radius={[4,4,0,0]} maxBarSize={32}/></BarChart></ResponsiveContainer></div><div className="stage-table"><table aria-label={t('dashboard.stageCounts')}><tbody>{stageCounts.map(stage=><tr key={stage.stage} onClick={() => setDrill({kpi:'transactions_by_stage',stage:stage.stage})} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setDrill({kpi:'transactions_by_stage',stage:stage.stage}) } }} aria-label={t('dashboard.openStage', { stage: stage.label, count: stage.count })} tabIndex={0}><td>{stage.label}</td><td>{stage.count}</td><td><span style={{ width: `${Math.max(stage.count / 3 * 100, 7)}%` }}/></td></tr>)}</tbody></table></div></>}</section>
+      <section className="dashboard-card milestones-card"><div className="dashboard-card-head"><div><span className="eyebrow">{t('dashboard.nextCheckpoints')}</span><h2>{t('dashboard.milestones')}</h2></div><button className="text-link" onClick={() => navigate('/transactions')}>{t('dashboard.allTransactions')} <ArrowUpRight size={12}/></button></div>{dashboard.data?.next_milestones.length ? <div className="milestone-list">{dashboard.data.next_milestones.map(item=><button className="milestone-row" key={item.id} onClick={() => navigate(`/transactions/${item.code}`)}><span className={`health-dot ${item.health}`}/><span className="milestone-main"><b>{item.code} · {item.name}</b><small>{stageLabel(item.stage, i18n.language, t)} · {item.next_milestone}</small></span><span className="milestone-date">{dateLabel(item.next_milestone_date, i18n.language)}<ArrowUpRight size={11}/></span></button>)}</div> : <div className="dashboard-empty">{dashboard.isPending ? t('dashboard.loadingMilestones') : t('dashboard.noMilestones')}</div>}</section>
+      <section className="dashboard-card"><div className="dashboard-card-head"><div><span className="eyebrow">{t('dashboard.ministerDecisions')}</span><h2>{t('dashboard.decisionsDue')}</h2></div><button className="text-link" onClick={() => navigate('/decisions')}>{t('dashboard.openList')} <ArrowUpRight size={12}/></button></div>{dashboard.data?.decisions_due.length ? <div className="compact-list">{dashboard.data.decisions_due.map(item=><button key={item.id} onClick={() => setDrill({kpi:'decisions_due_this_week'})}><span className="compact-date">{dateLabel(item.due_date, i18n.language)}</span><span><b>{item.title}</b><small>{item.transaction_code ? `Linked to ${item.transaction_code}` : item.context_ref ?? 'Office decision'}</small></span><ArrowUpRight size={12}/></button>)}</div> : <div className="dashboard-empty">{t('dashboard.noDecisions')}</div>}</section>
+      <section className="dashboard-card overdue-card"><div className="dashboard-card-head"><div><span className="eyebrow">{t('dashboard.register')}</span><h2>{t('dashboard.overdueActions')}</h2></div><button className="text-link" onClick={() => setDrill({kpi:'actions_overdue'})}>{t('dashboard.viewAll')} <ArrowUpRight size={12}/></button></div>{dashboard.data?.overdue_actions.length ? <div className="compact-list">{dashboard.data.overdue_actions.slice(0,6).map(item=><button key={item.id} onClick={() => navigate('/register')}><span className="compact-date overdue-date">{dateLabel(item.deadline, i18n.language)}</span><span><b>{item.fy}/{String(item.serial_no).padStart(3,'0')} · {item.description}</b><small>{item.officer_name} · Priority {item.priority}</small></span><ArrowDownRight size={12}/></button>)}</div> : <div className="dashboard-empty">{t('dashboard.noOverdue')}</div>}</section>
+      <section className="dashboard-card engagements-card"><div className="dashboard-card-head"><div><span className="eyebrow">{t('dashboard.officeEngagements')}</span><h2>{t('dashboard.upcoming')}</h2></div><button className="text-link" onClick={() => navigate('/engagements')}>{t('dashboard.calendar')} <ArrowUpRight size={12}/></button></div>{dashboard.data?.upcoming_engagements.length ? <div className="compact-list">{dashboard.data.upcoming_engagements.map(item=><button key={item.id} onClick={() => navigate('/engagements')}><span className="compact-date">{dateTimeLabel(item.starts_at, i18n.language)}</span><span><b>{item.title}</b><small>{item.owner_name} · Pack {item.pack_status.replaceAll('_',' ')}</small></span>{item.pack_at_risk ? <span className="risk-flag">Pack at risk</span> : item.pack_status === 'ready' ? <span className="ready-flag">{t('dashboard.ready')}</span> : <span className="pack-flag">{t('dashboard.inProgress')}</span>}</button>)}</div> : <div className="dashboard-empty">{t('dashboard.noEngagements')}</div>}</section>
+    </div>
+    {dashboard.data && <footer className="dashboard-footer"><span>{t('dashboard.dataFrom')} {dashboard.data.source_note}</span><span>{t('dashboard.refreshed')} {dateTimeLabel(dashboard.data.last_refreshed, i18n.language)}</span></footer>}
+    {drill && <DashboardDrill kpi={drill.kpi} stage={drill.stage} weekEnding={selectedWeek} onClose={() => setDrill(null)} onOpen={openRecord}/>}
+  </div>
+}
+
+function DashboardDrill({ kpi, stage, weekEnding, onClose, onOpen }: { kpi: string; stage?: string; weekEnding: string; onClose: () => void; onOpen: (record: DrillRecord) => void }) {
+  const { t, i18n } = useTranslation()
+  const drill = useQuery({ queryKey: ['dashboard-drill', kpi, stage, weekEnding], queryFn: () => getDashboardDrill(kpi, weekEnding, stage) })
+  const title = stage ? `${stageLabel(stage, i18n.language, t)} ${t('dashboard.transactionsLabel')}` : ({ transactions_in_process: t('dashboard.transactions'), decisions_due_this_week: t('dashboard.decisions'), actions_overdue: t('dashboard.overdue'), engagements_this_week: t('dashboard.engagements') }[kpi] ?? t('dashboard.sourceRecords'))
+  return <div className="drawer-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}><aside className="record-drawer dashboard-drill" aria-label={`${title} ${t('dashboard.sourceRecords')}`}><div className="drawer-top"><div><span className="eyebrow">{t('dashboard.reconcile')}</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('dashboard.closeRecords')}><X size={19}/></button></div><div className="drawer-scroll"><p className="drill-note">{t('dashboard.sourceExplanation')}</p>{drill.isPending ? <div className="dashboard-empty">{t('dashboard.loadingRecords')}</div> : drill.isError ? <div className="dashboard-empty error">{drill.error.message}</div> : <><div className="drill-total">{drill.data.total}<small>{t('dashboard.sourceRecords')}</small></div><div className="drill-records">{drill.data.records.map(record=><button key={`${record.record_type}-${record.id}`} onClick={() => onOpen(record)}><span>{record.record_type.replaceAll('_',' ')}</span><b>{record.label}</b><small>{record.due_date ? `Due ${dateLabel(record.due_date, i18n.language)}` : record.deadline ? `Deadline ${dateLabel(record.deadline, i18n.language)}` : record.starts_at ? dateTimeLabel(record.starts_at, i18n.language) : record.code ?? record.id}</small><ArrowUpRight size={14}/></button>)}</div></>}</div><div className="drawer-footer"><span>{t('dashboard.weekEndingLabel')} {dateLabel(weekEnding, i18n.language)}</span><button className="outline-button" onClick={onClose}>{t('dashboard.done')}</button></div></aside></div>
+}

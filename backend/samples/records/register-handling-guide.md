@@ -1,0 +1,1 @@
+Register actions must name one responsible officer and include a calendar deadline. AI-assisted suggestions remain proposals until an authorized reviewer approves them. Approved actions receive a financial-year serial number. Only approved entries are counted in dashboard totals. This synthetic guide is for the PC Command Center demo.
