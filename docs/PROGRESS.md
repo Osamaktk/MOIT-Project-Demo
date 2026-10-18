@@ -33,12 +33,12 @@ Acceptance passed: project/organisation/action/commitment models, rule tests, pe
 
 ### Phase 2 — Document intake (implementation complete; acceptance in progress)
 
-- [x] Add SHA-256 duplicate detection, PDF table extraction, document classification, OCR fallback with a clear missing-Tesseract error, and a review queue backed by migrations `0011_document_intake` and `0012_document_project_link`.
+- [x] Add SHA-256 duplicate detection, PDF table extraction, document classification, OCR fallback with a clear missing-Tesseract error, and a review queue backed by migrations `0011_document_intake`, `0012_document_project_link`, and `0013_meeting_intake_decisions`.
 - [x] Add structured extraction through the AI Gateway, one-repair schema validation, source-quote verification, organisation/project alias matching and reviewer-created entities, deadline normalization (including a mobilization date found in the minutes), and reviewer flags for unresolved rows.
 - [x] Add an editable two-pane source/review screen, Today-view drag and drop, upload access for the configured roles, Chief of Staff handoff, discard/confirm actions, and an audited per-document admin permission before confidential cloud extraction.
-- [x] Confirm creates meeting records for minutes, serial-numbered approved actions, commitments, project-linked documents, audit record, AI-run approval/edit outcome, local document index, and refreshed MoITT dashboard counts/project health. Other document types can also create evidence-verified actions and commitments after project review.
+- [x] Confirm creates meeting records for minutes with the reviewed summary, evidence-verified decisions, source-document link, and related actions, plus serial-numbered approved actions, commitments, project-linked documents, audit record, AI-run approval/edit outcome, local document index, and refreshed MoITT dashboard counts/project health. Other document types can also create evidence-verified actions and commitments after project review.
 - [x] Add synthetic look-alike, OCR, and optional local ministry PDF fixture tests. The supplied PDFs live only in ignored `backend/samples/ministry/`; both PDF samples yielded extracted table rows in the local environment.
-- [x] Backend suite: 77 passed. Frontend TypeScript/Vite production build passed. A fresh SQLite database upgraded through migration head.
+- [x] Backend suite: 78 passed. Frontend TypeScript/Vite production build passed. A fresh SQLite database upgraded through migration `0013_meeting_intake_decisions`; `alembic check` reports no drift.
 - [ ] Run a live OpenRouter extraction and review both local sample PDFs through the UI. No provider request was made in this phase.
 - [ ] Repeat the full 15-minute demo after intake and record the outcome.
 

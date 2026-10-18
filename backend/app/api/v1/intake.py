@@ -249,7 +249,8 @@ def confirm_intake(review_id: str, request: Request, db: Session = Depends(get_d
                 raise HTTPException(status_code=422, detail="Enter meeting time in 24-hour HH:MM format") from exc
         moment = datetime.combine(data.meeting_date, meeting_time, tzinfo=timezone.utc)
         participant_rows = [{"name": item.text, "organisation": item.org_hint} for item in data.participants]
-        meeting = Meeting(title=data.title, occurred_at=moment, occasion_type="meeting", location=data.venue or "Not recorded", attendees=participant_rows, chair=data.chair, venue=data.venue, participants=participant_rows, source_document_id=document.id, classification=document.classification, is_synthetic=False, status="reviewed", draft_due_at=moment + timedelta(days=1), issue_due_at=moment + timedelta(days=2), created_by=review.owner_id)
+        meeting_decisions = [item.model_dump(mode="json") for item in data.decisions if item.quote_verified]
+        meeting = Meeting(title=data.title, occurred_at=moment, occasion_type="meeting", location=data.venue or "Not recorded", attendees=participant_rows, chair=data.chair, venue=data.venue, participants=participant_rows, decisions=meeting_decisions, summary=data.summary, source_document_id=document.id, classification=document.classification, is_synthetic=False, status="reviewed", draft_due_at=moment + timedelta(days=1), issue_due_at=moment + timedelta(days=2), created_by=review.owner_id)
         db.add(meeting)
         db.flush()
     moment = datetime.combine(anchor_date, meeting_time if review.doc_kind == "minutes" else time(9), tzinfo=timezone.utc)

@@ -13,7 +13,7 @@ from app.ai.gateway import AIGateway
 from app.ai.stt import FasterWhisperProvider, STTProvider
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db, require_roles
-from app.db.models import AIRun, Job, Meeting, MeetingAction, MinutesDraft, RegisterEntry, ToolSwitch, Transaction, Transcript, User
+from app.db.models import AIRun, Action, Job, Meeting, MeetingAction, MinutesDraft, RegisterEntry, ToolSwitch, Transaction, Transcript, User
 from app.schemas.minutes import MeetingActionResponse, MeetingActionReview, MeetingActionUpdate, MeetingCreate, MeetingResponse, MinutesResponse, MinutesUpdate, TranscriptOutput
 from app.schemas.jobs import JobResponse
 from app.services.audit import add_audit_event
@@ -50,9 +50,20 @@ def _meeting_response(db: Session, meeting_id: str) -> MeetingResponse:
     if minutes_response is not None:
         minutes_response.demo_cache_used = cached_run is not None and cached_run.error_code == "demo_cache_used"
     actions = [MeetingActionResponse.model_validate({**{column.name: getattr(item, column.name) for column in MeetingAction.__table__.columns}, "officer_name": item.officer.name if item.officer else None}) for item in meeting.actions]
+    intake_actions = []
+    if meeting.source_document_id:
+        intake_actions = [
+            {"id": item.id, "description": item.description, "owner": item.owner_org.name if item.owner_org else item.owner_person_name,
+             "deadline": item.deadline.isoformat() if item.deadline else None, "deadline_text": item.deadline_text,
+             "priority": item.priority, "status": item.status, "serial_no": item.serial_no,
+             "project": item.project.name if item.project else None, "source_quote": item.source_quote, "source_page": item.source_page}
+            for item in db.scalars(select(Action).where(Action.source_document_id == meeting.source_document_id).order_by(Action.created_at, Action.id))
+        ]
     return MeetingResponse(
         id=meeting.id, title=meeting.title, occurred_at=meeting.occurred_at, occasion_type=meeting.occasion_type,
-        location=meeting.location, attendees=meeting.attendees, audio_url=f"/api/v1/meetings/{meeting.id}/audio" if meeting.audio_path else None,
+        location=meeting.location, attendees=meeting.attendees, decisions=meeting.decisions or [], summary=meeting.summary or "",
+        source_document_id=meeting.source_document_id, intake_actions=intake_actions,
+        audio_url=f"/api/v1/meetings/{meeting.id}/audio" if meeting.audio_path else None,
         language_hint=meeting.language_hint, classification=meeting.classification, is_synthetic=meeting.is_synthetic,
         status=meeting.status, draft_due_at=meeting.draft_due_at, issue_due_at=meeting.issue_due_at,
         transcript=transcript, minutes=minutes_response,

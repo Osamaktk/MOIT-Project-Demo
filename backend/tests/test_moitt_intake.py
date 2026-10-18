@@ -15,7 +15,7 @@ from app.db.base import Base
 from app.db.models import Action, Commitment, Document, IntakeReview, Meeting, Organisation, Project, User
 from app.main import app
 from app.api.v1 import intake as intake_api
-from app.schemas.intake import IntakeAction, IntakeCommitment, IntakeExtraction
+from app.schemas.intake import IntakeAction, IntakeCommitment, IntakeDecision, IntakeExtraction
 from app.services.intake import enrich_extraction, quote_is_supported
 
 
@@ -110,10 +110,10 @@ def test_confirmed_intake_creates_dashboard_records_and_updates_project_health(d
         project = Project(code="SYN-CIT", name="Synthetic Citizen Services Centre", aliases=[], sector="Digital", stage="implementation", health="on_track", health_reason="Initial.", summary="Synthetic project for intake acceptance coverage.")
         db.add_all([org, minister, project])
         db.flush()
-        document = Document(title="Synthetic minutes", doc_type="minute", classification="internal", file_path="/tmp/synthetic.txt", text_extracted="Evidence: CDA will submit this estimate by 1 January 2025.\nThe centre will be ready by 23 March 2027.", is_synthetic=True, ingest_status="review")
+        document = Document(title="Synthetic minutes", doc_type="minute", classification="internal", file_path="/tmp/synthetic.txt", text_extracted="Evidence: CDA will submit this estimate by 1 January 2025.\nThe centre will be ready by 23 March 2027.\nThe synthetic centre plan is approved.", is_synthetic=True, ingest_status="review")
         db.add(document)
         db.flush()
-        payload = IntakeExtraction(doc_kind="minutes", title="Synthetic Citizen Services Centre review", meeting_date=date(2025, 1, 1), chair="Synthetic Minister", venue="Synthetic room", participants=[{"text": "Synthetic Secretary", "org_hint": "Synthetic Ministry"}], project_hint=project.name, summary="Synthetic acceptance fixture.", actions=[IntakeAction(description="CDA to submit the revised estimate.", owner_org=org.name, deadline_text="Immediate", project=project.name, source_quote="CDA will submit this estimate by 1 January 2025.", source_page=1, quote_verified=True)], commitments=[IntakeCommitment(statement="The service centre was due to be ready.", committed_by_org=org.name, due_text="1 December 2024", project=project.name, source_quote="The centre was to be ready by 1 December 2024.", source_page=1, quote_verified=True)])
+        payload = IntakeExtraction(doc_kind="minutes", title="Synthetic Citizen Services Centre review", meeting_date=date(2025, 1, 1), chair="Synthetic Minister", venue="Synthetic room", participants=[{"text": "Synthetic Secretary", "org_hint": "Synthetic Ministry"}], project_hint=project.name, summary="Synthetic acceptance fixture.", actions=[IntakeAction(description="CDA to submit the revised estimate.", owner_org=org.name, deadline_text="Immediate", project=project.name, source_quote="CDA will submit this estimate by 1 January 2025.", source_page=1, quote_verified=True)], commitments=[IntakeCommitment(statement="The service centre was due to be ready.", committed_by_org=org.name, due_text="1 December 2024", project=project.name, source_quote="The centre was to be ready by 1 December 2024.", source_page=1, quote_verified=True)], decisions=[IntakeDecision(text="Proceed with the synthetic centre plan.", source_quote="The synthetic centre plan is approved.", source_page=1, quote_verified=True)])
         document.text_extracted += "\nThe centre was to be ready by 1 December 2024."
         review = IntakeReview(document_id=document.id, owner_id=minister.id, status="review", doc_kind="minutes", payload=payload.model_dump(mode="json"), warnings=[])
         db.add(review)
@@ -134,13 +134,67 @@ def test_confirmed_intake_creates_dashboard_records_and_updates_project_health(d
             assert dashboard.json()["moitt"]["open_actions"] == 1
             assert dashboard.json()["moitt"]["open_commitments"] == 1
             assert dashboard.json()["moitt"]["overdue_actions"] == 1
+            meetings = client.get("/api/v1/meetings", headers={"Authorization": f"Bearer {token}"})
+            assert meetings.status_code == 200
+            assert meetings.json()[0]["decisions"][0]["text"] == "Proceed with the synthetic centre plan."
+            assert meetings.json()[0]["summary"] == "Synthetic acceptance fixture."
+            assert meetings.json()[0]["source_document_id"] == review.document_id
+            assert meetings.json()[0]["intake_actions"][0]["description"] == "CDA to submit the revised estimate."
         with db_factory() as db:
-            assert db.scalar(select(Meeting).where(Meeting.source_document_id == review.document_id)) is not None
+            saved_meeting = db.scalar(select(Meeting).where(Meeting.source_document_id == review.document_id))
+            assert saved_meeting is not None
+            assert saved_meeting.decisions == [{"text": "Proceed with the synthetic centre plan.", "source_quote": "The synthetic centre plan is approved.", "source_page": 1, "quote_verified": True}]
             actions = list(db.scalars(select(Action).where(Action.source_document_id == review.document_id)))
             assert len(actions) == 1 and actions[0].serial_no == 1 and actions[0].review_state == "approved"
             assert db.scalar(select(Commitment).where(Commitment.source_document_id == review.document_id)) is not None
             project = db.scalar(select(Project).where(Project.code == "SYN-CIT"))
         assert project and project.health == "delayed"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_letter_review_can_create_project_and_owner_then_confirm_action(db_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(intake_api, "index_intake_document", lambda db, document: None)
+    quote = "Synthetic Digital Office will submit the connectivity plan by 25 October 2026."
+    with db_factory() as db:
+        minister = User(name="Synthetic Minister", email="minister-letter@test.invalid", role="minister", designation="Minister", password_hash="x")
+        db.add(minister)
+        db.flush()
+        document = Document(title="Synthetic project letter", doc_type="letter", classification="internal", file_path="/tmp/synthetic-letter.txt", text_extracted=quote, is_synthetic=True, ingest_status="review")
+        db.add(document)
+        db.flush()
+        payload = IntakeExtraction(doc_kind="letter", title="Synthetic project letter", project_hint="Synthetic Connectivity Project", summary="Synthetic letter asks for a connectivity plan by 25 October 2026.", actions=[IntakeAction(description="Submit the connectivity plan.", owner_org="Synthetic Digital Office", deadline_text="25 October 2026", project="Synthetic Connectivity Project", source_quote=quote, quote_verified=True)])
+        review = IntakeReview(document_id=document.id, owner_id=minister.id, status="review", doc_kind="letter", payload=payload.model_dump(mode="json"), warnings=[])
+        db.add(review)
+        db.commit()
+        review_id, document_id = review.id, document.id
+        token = create_access_token(minister.id)
+
+    def override_db() -> Generator[Session, None, None]:
+        with db_factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        with TestClient(app) as client:
+            edited = client.patch(f"/api/v1/intake/{review_id}", headers=headers, json={"payload": payload.model_dump(mode="json"), "create_organisations": ["Synthetic Digital Office"], "create_projects": ["Synthetic Connectivity Project"]})
+            assert edited.status_code == 200, edited.text
+            assert edited.json()["payload"]["actions"][0]["needs_input"] is False
+            confirmed = client.post(f"/api/v1/intake/{review_id}/confirm", headers=headers)
+            assert confirmed.status_code == 200, confirmed.text
+            dashboard = client.get("/api/v1/dashboard", headers=headers)
+            assert dashboard.status_code == 200
+            assert dashboard.json()["moitt"]["open_actions"] == 1
+            assert client.get("/api/v1/meetings", headers=headers).json() == []
+        with db_factory() as db:
+            project = db.scalar(select(Project).where(Project.name == "Synthetic Connectivity Project"))
+            organisation = db.scalar(select(Organisation).where(Organisation.name == "Synthetic Digital Office"))
+            document = db.get(Document, document_id)
+            action = db.scalar(select(Action).where(Action.source_document_id == document_id))
+            assert project is not None and document is not None and document.project_id == project.id
+            assert organisation is not None and action is not None and action.owner_org_id == organisation.id
+            assert action.project_id == project.id and action.serial_no == 1 and action.source_quote == quote
     finally:
         app.dependency_overrides.clear()
 

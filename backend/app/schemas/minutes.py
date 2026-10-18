@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -119,6 +119,10 @@ class MeetingResponse(BaseModel):
     occasion_type: str
     location: str
     attendees: list[dict[str, object]]
+    decisions: list[dict[str, Any]] = Field(default_factory=list)
+    summary: str = ""
+    source_document_id: str | None = None
+    intake_actions: list[dict[str, Any]] = Field(default_factory=list)
     audio_url: str | None = None
     language_hint: str
     classification: str

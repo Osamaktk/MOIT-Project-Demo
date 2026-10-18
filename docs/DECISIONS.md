@@ -2,6 +2,7 @@
 
 - **2026-10-18 — Hold confidential uploads before cloud extraction.** The intake screen stores the source locally and waits for an audited administrator decision attached to that document. Extraction remains behind the AI Gateway; indexing after confirmation uses local embeddings.
 - **2026-10-18 — Verify evidence before confirming extracted actions.** Source quotes are matched against extracted document text and checked again on confirmation. A reviewer can correct the quote against the source pane; unresolved owners, projects, and dates block confirmation.
+- **2026-10-18 — Keep intake meeting outcomes on the meeting record.** Verified decisions, the reviewed summary, linked source document, and actions created from that document are returned with the meeting API and shown on its detail screen.
 - **2026-10-18 — Use a separate intake review row and preserve the legacy document API.** The staged migration adds duplicate metadata and review state without changing the existing Records Search upload contract.
 
 - **2026-10-18 — Keep v2 backend credentials in `backend/.env`.** The file is ignored explicitly; `.env.example` stays credential-free. The model-catalogue check uses the public catalogue endpoint without sending the configured secret.

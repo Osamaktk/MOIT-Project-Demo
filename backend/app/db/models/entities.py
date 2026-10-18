@@ -276,6 +276,8 @@ class Meeting(TimestampMixin, Base):
     chair: Mapped[str | None] = mapped_column(String(255))
     venue: Mapped[str | None] = mapped_column(String(255))
     participants: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    decisions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]", nullable=False)
+    summary: Mapped[str] = mapped_column(String(2000), default="", server_default="", nullable=False)
     source_document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), index=True)
     audio_path: Mapped[str | None] = mapped_column(String(500))
     language_hint: Mapped[str] = mapped_column(String(20), default="en", nullable=False)
