@@ -27,6 +27,7 @@ Acceptance passed: clean Windows and Linux frontend installs/builds, local-only 
 - [x] Build the frontend, run doctor (11/11), parse-check PowerShell and Bash launchers, and scan the repository: no U+00C2/U+00C3 mojibake markers.
 - [x] Run the updated backend against a fresh seeded SQLite database: health returned 200, the Minister read both MoITT projects and actions, and the Admin project request returned 403.
 - [x] Capture the backend API screenshot: [`docs/screenshots/phase-1/projects-api.png`](screenshots/phase-1/projects-api.png).
+- [x] Linux frontend install/build workflow passed on commit `b541e3c` ([workflow run](https://github.com/Osamaktk/MOIT-Project-Demo/actions/runs/39138059470)).
 
 Acceptance passed: project/organisation/action/commitment models, rule tests, permission matrix, and role-scoped API checks are complete. The backend services were stopped after the screenshot so ports 8000 and 5173 are clear for the user to run locally. Phase 2 has not started.
 
