@@ -355,9 +355,11 @@ class Document(TimestampMixin, Base):
     sha256: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
     uploaded_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
     cloud_ai_allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"), index=True)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ingest_status: Mapped[str] = mapped_column(String(24), default="ready", index=True, nullable=False)
     transaction: Mapped[Transaction | None] = relationship()
+    project: Mapped[Project | None] = relationship()
     chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")
 
 

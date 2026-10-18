@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shutil
-from datetime import datetime
+from datetime import date, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -34,7 +34,17 @@ def extract_intake_pages(path: Path) -> list[tuple[int | None, str]]:
                         number, body = pages[index]
                         if table_text not in body:
                             pages[index] = (number, f"{body}\n\nExtracted table rows:\n{table_text}")
-    if not any(text.strip() for _, text in pages):
+    image_suffixes = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
+    ocr_indexes: list[int] = []
+    if suffix == ".pdf":
+        blank_indexes = [index for index, (_, text) in enumerate(pages) if not text.strip()]
+        if blank_indexes:
+            from pypdf import PdfReader
+            reader = PdfReader(str(path))
+            ocr_indexes = [index for index in blank_indexes if bool(getattr(reader.pages[index], "images", []))]
+    if suffix in image_suffixes:
+        ocr_indexes = [0]
+    if ocr_indexes:
         try:
             import pytesseract
             from PIL import Image
@@ -45,9 +55,14 @@ def extract_intake_pages(path: Path) -> list[tuple[int | None, str]]:
             raise ValueError("This scanned document needs OCR, but the Tesseract executable was not found.")
         if suffix == ".pdf":
             rendered = PdfDocument(str(path))
-            pages = [(index + 1, pytesseract.image_to_string(page.render(scale=2).to_pil())) for index, page in enumerate(rendered)]
-        elif suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}:
+            for index in ocr_indexes:
+                if index < len(rendered):
+                    number, _body = pages[index]
+                    pages[index] = (number, pytesseract.image_to_string(rendered[index].render(scale=2).to_pil()))
+        elif suffix in image_suffixes:
             pages = [(1, pytesseract.image_to_string(Image.open(path)))]
+    if not any(text.strip() for _, text in pages):
+        raise ValueError("No readable text could be extracted. Check the scan quality and OCR language setup, then retry.")
     return pages
 
 
@@ -107,18 +122,19 @@ def _alias_match(value: str | None, rows: list, *, fields: tuple[str, ...]) -> s
     return None
 
 
-def enrich_extraction(db: Session, result: IntakeExtraction, pages: list[tuple[int | None, str]]) -> tuple[IntakeExtraction, list[str]]:
+def enrich_extraction(db: Session, result: IntakeExtraction, pages: list[tuple[int | None, str]], *, anchor_date: date | None = None) -> tuple[IntakeExtraction, list[str]]:
     warnings: list[str] = []
     organisations = list(db.scalars(select(Organisation)))
     projects = list(db.scalars(select(Project)))
     mobilization_date = _mobilization_date(pages)
+    reference_date = result.meeting_date or anchor_date
     if result.project_hint:
-        result.project_hint = _alias_match(result.project_hint, projects, fields=("name", "aliases")) or result.project_hint
+        result.project_hint = _alias_match(result.project_hint, projects, fields=("name", "aliases", "code")) or result.project_hint
     for action in result.actions:
         action.quote_verified = quote_is_supported(action.source_quote, pages)
         action.owner_org = _alias_match(action.owner_org, organisations, fields=("name", "short_name", "aliases")) or action.owner_org
-        action.project = _alias_match(action.project or result.project_hint, projects, fields=("name", "aliases")) or action.project or result.project_hint
-        normalized = normalize_deadline(action.deadline_text, result.meeting_date, mobilization_date=mobilization_date) if result.meeting_date else None
+        action.project = _alias_match(action.project or result.project_hint, projects, fields=("name", "aliases", "code")) or action.project or result.project_hint
+        normalized = normalize_deadline(action.deadline_text, reference_date, mobilization_date=mobilization_date) if reference_date else None
         action.resolved_deadline = normalized.resolved_date if normalized else None
         action.deadline_precision = normalized.precision if normalized else "relative"
         action.needs_input = (not action.owner_org and not action.owner_person) or not action.deadline_text or (normalized.needs_input if normalized else True) or not action.project or not action.quote_verified
@@ -129,8 +145,8 @@ def enrich_extraction(db: Session, result: IntakeExtraction, pages: list[tuple[i
     for commitment in result.commitments:
         commitment.quote_verified = quote_is_supported(commitment.source_quote, pages)
         commitment.committed_by_org = _alias_match(commitment.committed_by_org, organisations, fields=("name", "short_name", "aliases")) or commitment.committed_by_org
-        commitment.project = _alias_match(commitment.project or result.project_hint, projects, fields=("name", "aliases")) or commitment.project or result.project_hint
-        normalized = normalize_deadline(commitment.due_text, result.meeting_date, mobilization_date=mobilization_date) if result.meeting_date else None
+        commitment.project = _alias_match(commitment.project or result.project_hint, projects, fields=("name", "aliases", "code")) or commitment.project or result.project_hint
+        normalized = normalize_deadline(commitment.due_text, reference_date, mobilization_date=mobilization_date) if reference_date else None
         commitment.resolved_due_date = normalized.resolved_date if normalized else None
         commitment.deadline_precision = normalized.precision if normalized else "relative"
         commitment.needs_input = not commitment.project or not commitment.due_text or (normalized.needs_input if normalized else True) or not commitment.quote_verified
@@ -138,6 +154,10 @@ def enrich_extraction(db: Session, result: IntakeExtraction, pages: list[tuple[i
             warnings.append("An extracted commitment has a source quote that could not be verified.")
         if commitment.needs_input:
             warnings.append("An extracted commitment needs a reviewer to resolve its project or due date.")
+    for decision in result.decisions:
+        decision.quote_verified = quote_is_supported(decision.source_quote, pages)
+        if not decision.quote_verified:
+            warnings.append("An extracted decision has a source quote that could not be verified.")
     return result, sorted(set(warnings))
 
 
@@ -151,7 +171,8 @@ async def extract_document(db: Session, *, document: Document, user_id: str) -> 
         "Extract structured facts from this ministry document. Do not invent actions. Copy each source_quote verbatim "
         "from the supplied text, including action table rows. Preserve the original deadline words. Keep organization "
         "and project names as written. A person who merely presents information is not an action owner unless assigned. "
-        "For non-minutes, classify and summarize with empty actions and commitments.\n\n" + text[:100000]
+        "For letters, briefs, notes and other document types, still extract any explicitly assigned actions and commitments; do not invent an owner or deadline. "
+        "Summarize in exactly three short sentences. Copy every source_quote verbatim. Include meeting time, decisions, project hints, priority suggestion, and confidence when supported by evidence.\n\n" + text[:100000]
     )
     run_id: dict[str, str] = {}
     extracted = await AIGateway().chat(
@@ -162,5 +183,5 @@ async def extract_document(db: Session, *, document: Document, user_id: str) -> 
         run_id_out=run_id, allow_confidential_cloud=document.cloud_ai_allowed,
     )
     assert isinstance(extracted, IntakeExtraction)
-    enriched, warnings = enrich_extraction(db, extracted, pages)
+    enriched, warnings = enrich_extraction(db, extracted, pages, anchor_date=document.created_at.date())
     return enriched, warnings, run_id.get("run_id")

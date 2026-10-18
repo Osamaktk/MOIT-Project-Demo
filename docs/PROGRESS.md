@@ -33,16 +33,16 @@ Acceptance passed: project/organisation/action/commitment models, rule tests, pe
 
 ### Phase 2 — Document intake (implementation complete; acceptance in progress)
 
-- [x] Add SHA-256 duplicate detection, PDF table extraction support, document classification, OCR fallback with a clear missing-Tesseract error, and a review queue backed by migration `0011_document_intake`.
-- [x] Add structured extraction through the AI Gateway, one-repair schema validation, source-quote verification, organisation/project alias matching, deadline normalization (including a mobilization date found in the minutes), and reviewer flags for unresolved rows.
-- [x] Add an editable two-pane source/review screen, upload access for the configured roles, Chief of Staff handoff, discard/confirm actions, and an audited per-document admin permission before confidential cloud extraction.
-- [x] Confirm creates the meeting, serial-numbered approved actions, commitments, audit record, AI-run approval/edit outcome, local document index, and refreshed MoITT dashboard counts/project health.
-- [x] Add synthetic look-alike tests and optional local real-PDF fixture tests. The supplied PDFs live only in ignored `backend/samples/ministry/`.
-- [x] Backend suite: 75 passed. Frontend TypeScript/Vite production build passed. Fresh SQLite migration to head and `alembic check` passed without schema drift.
+- [x] Add SHA-256 duplicate detection, PDF table extraction, document classification, OCR fallback with a clear missing-Tesseract error, and a review queue backed by migrations `0011_document_intake` and `0012_document_project_link`.
+- [x] Add structured extraction through the AI Gateway, one-repair schema validation, source-quote verification, organisation/project alias matching and reviewer-created entities, deadline normalization (including a mobilization date found in the minutes), and reviewer flags for unresolved rows.
+- [x] Add an editable two-pane source/review screen, Today-view drag and drop, upload access for the configured roles, Chief of Staff handoff, discard/confirm actions, and an audited per-document admin permission before confidential cloud extraction.
+- [x] Confirm creates meeting records for minutes, serial-numbered approved actions, commitments, project-linked documents, audit record, AI-run approval/edit outcome, local document index, and refreshed MoITT dashboard counts/project health. Other document types can also create evidence-verified actions and commitments after project review.
+- [x] Add synthetic look-alike, OCR, and optional local ministry PDF fixture tests. The supplied PDFs live only in ignored `backend/samples/ministry/`; both PDF samples yielded extracted table rows in the local environment.
+- [x] Backend suite: 77 passed. Frontend TypeScript/Vite production build passed. A fresh SQLite database upgraded through migration head.
 - [ ] Run a live OpenRouter extraction and review both local sample PDFs through the UI. No provider request was made in this phase.
 - [ ] Repeat the full 15-minute demo after intake and record the outcome.
 
-Acceptance is still in progress: automated extraction is covered with mocks and the PDF text fixtures pass, but live provider extraction and the full UI rehearsal have not been run. The agent Python environment currently lacks the newly declared `pdfplumber`/OCR packages; install `backend/requirements.txt` there before trying table extraction or OCR locally. OCR also requires the Tesseract system executable.
+Acceptance is still in progress: live OpenRouter extraction and the full UI rehearsal have not been run. Local PDF table extraction and OCR paths are verified with the agent environment packages and Tesseract installed. Do not treat mocked extraction tests as proof of a live provider run.
 
 ## Phase 0 — Foundation (accepted)
 

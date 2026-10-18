@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from datetime import date, datetime, timezone
 from pathlib import Path
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
@@ -112,7 +113,7 @@ def test_confirmed_intake_creates_dashboard_records_and_updates_project_health(d
         document = Document(title="Synthetic minutes", doc_type="minute", classification="internal", file_path="/tmp/synthetic.txt", text_extracted="Evidence: CDA will submit this estimate by 1 January 2025.\nThe centre will be ready by 23 March 2027.", is_synthetic=True, ingest_status="review")
         db.add(document)
         db.flush()
-        payload = IntakeExtraction(doc_kind="minutes", title="Synthetic Citizen Services Centre review", meeting_date=date(2025, 1, 1), chair="Synthetic Minister", venue="Synthetic room", participants=["Synthetic Secretary"], project_hint=project.name, summary="Synthetic acceptance fixture.", actions=[IntakeAction(description="CDA to submit the revised estimate.", owner_org=org.name, deadline_text="Immediate", project=project.name, source_quote="CDA will submit this estimate by 1 January 2025.", source_page=1, quote_verified=True)], commitments=[IntakeCommitment(statement="The service centre was due to be ready.", committed_by_org=org.name, due_text="1 December 2024", project=project.name, source_quote="The centre was to be ready by 1 December 2024.", source_page=1, quote_verified=True)])
+        payload = IntakeExtraction(doc_kind="minutes", title="Synthetic Citizen Services Centre review", meeting_date=date(2025, 1, 1), chair="Synthetic Minister", venue="Synthetic room", participants=[{"text": "Synthetic Secretary", "org_hint": "Synthetic Ministry"}], project_hint=project.name, summary="Synthetic acceptance fixture.", actions=[IntakeAction(description="CDA to submit the revised estimate.", owner_org=org.name, deadline_text="Immediate", project=project.name, source_quote="CDA will submit this estimate by 1 January 2025.", source_page=1, quote_verified=True)], commitments=[IntakeCommitment(statement="The service centre was due to be ready.", committed_by_org=org.name, due_text="1 December 2024", project=project.name, source_quote="The centre was to be ready by 1 December 2024.", source_page=1, quote_verified=True)])
         document.text_extracted += "\nThe centre was to be ready by 1 December 2024."
         review = IntakeReview(document_id=document.id, owner_id=minister.id, status="review", doc_kind="minutes", payload=payload.model_dump(mode="json"), warnings=[])
         db.add(review)
@@ -158,7 +159,36 @@ def test_real_ministry_pdf_fixtures_are_optional_and_text_extractable(filename: 
     from app.services.intake import extract_intake_pages
     text = "\n".join(page for _, page in extract_intake_pages(fixture)).casefold()
     assert len(text) > 200
+    assert "extracted table rows:" in text
     if "IT_Park" in filename:
         assert "it park" in text and "tender" in text
     else:
         assert "khidmat" in text and ("180" in text or "23 march" in text)
+
+
+def test_image_upload_uses_tesseract_ocr(tmp_path: Path) -> None:
+    if not shutil.which("tesseract"):
+        pytest.skip("Tesseract executable is not installed")
+    from PIL import Image, ImageDraw, ImageFont
+    from app.services.intake import extract_intake_pages
+
+    image_path = tmp_path / "synthetic-ocr.png"
+    image = Image.new("RGB", (1800, 300), "white")
+    draw = ImageDraw.Draw(image)
+    font_path = Path("C:/Windows/Fonts/arial.ttf")
+    font = ImageFont.truetype(str(font_path), 72) if font_path.exists() else ImageFont.load_default(size=72)
+    draw.text((60, 90), "SYNTHETIC OCR TEST PROJECT UPDATE", fill="black", font=font)
+    image.save(image_path)
+    pages = extract_intake_pages(image_path)
+    assert "SYNTHETIC OCR TEST" in pages[0][1].upper()
+
+
+def test_scanned_image_reports_missing_tesseract_clearly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PIL import Image
+    import app.services.intake as intake_service
+
+    image_path = tmp_path / "blank-scan.png"
+    Image.new("RGB", (32, 32), "white").save(image_path)
+    monkeypatch.setattr(intake_service.shutil, "which", lambda _: None)
+    with pytest.raises(ValueError, match="Tesseract executable was not found"):
+        intake_service.extract_intake_pages(image_path)

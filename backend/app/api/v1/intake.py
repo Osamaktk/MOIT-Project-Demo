@@ -1,6 +1,7 @@
 from datetime import datetime, time, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -132,12 +133,43 @@ def update_intake(review_id: str, payload: IntakeEdit, request: Request, db: Ses
     pages = [(None, document.text_extracted)]
     actions = data.actions
     commitments = data.commitments
+    created_organisations: list[str] = []
+    created_projects: list[str] = []
+    known_orgs = list(db.scalars(select(Organisation)))
+    for name in payload.create_organisations:
+        clean = name.strip()
+        if not clean or any(item.name.casefold() == clean.casefold() for item in known_orgs):
+            continue
+        short = "".join(part[0] for part in re.findall(r"[A-Za-z0-9]+", clean)).upper()[:36] or "ORG"
+        base, suffix = short, 1
+        while db.scalar(select(Organisation.id).where(Organisation.short_name == short)):
+            suffix += 1
+            short = f"{base[:34]}{suffix}"
+        organisation = Organisation(name=clean, short_name=short, type="agency", aliases=[])
+        db.add(organisation)
+        db.flush()
+        known_orgs.append(organisation)
+        created_organisations.append(organisation.id)
+    known_projects = list(db.scalars(select(Project)))
+    for name in payload.create_projects:
+        clean = name.strip()
+        if not clean or any(item.name.casefold() == clean.casefold() for item in known_projects):
+            continue
+        code = f"NEW-{sha256(clean.casefold().encode('utf-8')).hexdigest()[:8].upper()}"
+        project = Project(code=code, name=clean, aliases=[], sector="MoITT", stage="planning", health="on_track", health_reason="No overdue actions or near-term unmet commitments.", summary=f"Project added during document review: {clean}")
+        db.add(project)
+        db.flush()
+        known_projects.append(project)
+        created_projects.append(project.id)
     # Recheck quotes on reviewer edits; the UI cannot mark invented evidence as verified.
     from app.services.intake import enrich_extraction
-    data, warnings = enrich_extraction(db, data, pages)
+    data, warnings = enrich_extraction(db, data, pages, anchor_date=document.created_at.date())
+    document_project_name = data.project_hint or next((item.project for item in data.actions if item.project), None) or next((item.project for item in data.commitments if item.project), None)
+    project = next((item for item in known_projects if document_project_name and (item.name == document_project_name or item.code == document_project_name)), None)
+    document.project_id = project.id if project else None
     review.payload, review.warnings = data.model_dump(mode="json"), warnings
     review.was_edited = True
-    add_audit_event(db, actor, request, action="intake_review_edited", entity_type="intake_review", entity_id=review.id, after={"action_count": len(actions), "commitment_count": len(commitments), "warnings": warnings})
+    add_audit_event(db, actor, request, action="intake_review_edited", entity_type="intake_review", entity_id=review.id, after={"action_count": len(actions), "commitment_count": len(commitments), "created_organisation_ids": created_organisations, "created_project_ids": created_projects, "warnings": warnings})
     db.commit()
     return _view(review)
 
@@ -200,50 +232,72 @@ def confirm_intake(review_id: str, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=403, detail="Only the uploader or assigned reviewer can confirm this upload")
     document = db.get(Document, review.document_id)
     data = IntakeExtraction.model_validate(review.payload)
-    data, verified_warnings = enrich_extraction(db, data, [(None, document.text_extracted)])
+    anchor_date = data.meeting_date or document.created_at.date()
+    data, verified_warnings = enrich_extraction(db, data, [(None, document.text_extracted)], anchor_date=document.created_at.date())
     review.payload = data.model_dump(mode="json")
     review.warnings = verified_warnings
     created_actions: list[Action] = []
+    meeting = None
     if review.doc_kind == "minutes":
         if data.meeting_date is None:
             raise HTTPException(status_code=422, detail="Add the meeting date before confirming")
-        moment = datetime.combine(data.meeting_date, time(9), tzinfo=timezone.utc)
-        meeting = Meeting(title=data.title, occurred_at=moment, occasion_type="meeting", location=data.venue or "Not recorded", attendees=[{"name": name} for name in data.participants], chair=data.chair, venue=data.venue, participants=[{"name": name} for name in data.participants], source_document_id=document.id, classification=document.classification, is_synthetic=False, status="reviewed", draft_due_at=moment + timedelta(days=1), issue_due_at=moment + timedelta(days=2), created_by=review.owner_id)
+        meeting_time = time(9)
+        if data.meeting_time:
+            try:
+                meeting_time = time.fromisoformat(data.meeting_time)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail="Enter meeting time in 24-hour HH:MM format") from exc
+        moment = datetime.combine(data.meeting_date, meeting_time, tzinfo=timezone.utc)
+        participant_rows = [{"name": item.text, "organisation": item.org_hint} for item in data.participants]
+        meeting = Meeting(title=data.title, occurred_at=moment, occasion_type="meeting", location=data.venue or "Not recorded", attendees=participant_rows, chair=data.chair, venue=data.venue, participants=participant_rows, source_document_id=document.id, classification=document.classification, is_synthetic=False, status="reviewed", draft_due_at=moment + timedelta(days=1), issue_due_at=moment + timedelta(days=2), created_by=review.owner_id)
         db.add(meeting)
         db.flush()
-        for item in data.actions:
-            if not item.quote_verified or item.needs_input:
-                raise HTTPException(status_code=422, detail="Resolve every flagged action and verify its source quote before confirming")
-            owner = next((row for row in db.scalars(select(Organisation)) if item.owner_org and (row.name == item.owner_org or row.short_name == item.owner_org)), None)
-            project = next((row for row in db.scalars(select(Project)) if item.project and (row.name == item.project or row.code == item.project)), None)
-            if (not owner and not item.owner_person) or (item.project and not project):
-                raise HTTPException(status_code=422, detail="Select a known owner and project for every action")
-            if item.resolved_deadline is None:
-                raise HTTPException(status_code=422, detail=f"Resolve deadline '{item.deadline_text}' before confirming")
-            action = Action(fy=f"{data.meeting_date.year}-{(data.meeting_date.year + 1) % 100:02d}" if data.meeting_date.month >= 7 else f"{data.meeting_date.year - 1}-{data.meeting_date.year % 100:02d}", serial_no=None, description=item.description, owner_org_id=owner.id if owner else None, owner_person_name=item.owner_person, occurred_at=moment, deadline=item.resolved_deadline, deadline_text=item.deadline_text, deadline_precision=item.deadline_precision, status="closed" if item.status_source == "done_at_upload" else "open", status_source=item.status_source, review_state="proposed", origin="document_intake", project_id=project.id if project else None, source_document_id=document.id, source_quote=item.source_quote, source_page=item.source_page)
-            db.add(action)
-            db.flush()
-            approve_action(db, action)
-            created_actions.append(action)
-        for item in data.commitments:
-            if not item.quote_verified or item.needs_input:
-                raise HTTPException(status_code=422, detail="Resolve every flagged commitment and verify its source quote before confirming")
-            project = next((row for row in db.scalars(select(Project)) if item.project and (row.name == item.project or row.code == item.project)), None)
-            if project is None:
-                raise HTTPException(status_code=422, detail="Select a known project for every commitment")
-            if item.resolved_due_date is None:
-                raise HTTPException(status_code=422, detail=f"Resolve commitment date '{item.due_text}' before confirming")
-            organisation = next((row for row in db.scalars(select(Organisation)) if item.committed_by_org and (row.name == item.committed_by_org or row.short_name == item.committed_by_org)), None)
-            db.add(Commitment(project_id=project.id, statement=item.statement, committed_by_org_id=organisation.id if organisation else None, committed_by_text=item.committed_by_text, due_date=item.resolved_due_date, due_text=item.due_text, precision=item.deadline_precision, status="pending", source_document_id=document.id, source_quote=item.source_quote))
+    moment = datetime.combine(anchor_date, meeting_time if review.doc_kind == "minutes" else time(9), tzinfo=timezone.utc)
+    known_orgs = list(db.scalars(select(Organisation)))
+    known_projects = list(db.scalars(select(Project)))
+    document_project_name = data.project_hint or next((item.project for item in data.actions if item.project), None) or next((item.project for item in data.commitments if item.project), None)
+    project_for_hint = next((row for row in known_projects if document_project_name and (row.name == document_project_name or row.code == document_project_name)), None)
+    if document.project_id is None and project_for_hint:
+        document.project_id = project_for_hint.id
+    if review.doc_kind != "minutes" and document.project_id is None:
+        raise HTTPException(status_code=422, detail="Link this document to a project before confirming")
+    for item in data.actions:
+        if not item.quote_verified or item.needs_input:
+            raise HTTPException(status_code=422, detail="Resolve every flagged action and verify its source quote before confirming")
+        owner = next((row for row in known_orgs if item.owner_org and (row.name == item.owner_org or row.short_name == item.owner_org or item.owner_org in (row.aliases or []))), None)
+        project = next((row for row in known_projects if item.project and (row.name == item.project or row.code == item.project)), None)
+        if (not owner and not item.owner_person) or not project:
+            raise HTTPException(status_code=422, detail="Select or create a known owner and project for every action")
+        if item.resolved_deadline is None:
+            raise HTTPException(status_code=422, detail=f"Resolve deadline '{item.deadline_text}' before confirming")
+        action_fy = f"{anchor_date.year}-{(anchor_date.year + 1) % 100:02d}" if anchor_date.month >= 7 else f"{anchor_date.year - 1}-{anchor_date.year % 100:02d}"
+        action = Action(fy=action_fy, serial_no=None, description=item.description, owner_org_id=owner.id if owner else None, owner_person_name=item.owner_person, occurred_at=moment, deadline=item.resolved_deadline, deadline_text=item.deadline_text, deadline_precision=item.deadline_precision, priority=item.priority, status="closed" if item.status_source == "done_at_upload" else "open", status_source=item.status_source, review_state="proposed", origin="document_intake", project_id=project.id, source_document_id=document.id, source_quote=item.source_quote, source_page=item.source_page)
+        db.add(action)
         db.flush()
-        touched = {action.project_id for action in created_actions if action.project_id}
-        touched.update(item.project_id for item in db.scalars(select(Commitment).where(Commitment.source_document_id == document.id)))
-        for project_id in touched:
-            project = db.get(Project, project_id)
-            if project:
-                recompute_project_health(db, project)
+        approve_action(db, action)
+        created_actions.append(action)
+    for item in data.commitments:
+        if not item.quote_verified or item.needs_input:
+            raise HTTPException(status_code=422, detail="Resolve every flagged commitment and verify its source quote before confirming")
+        project = next((row for row in known_projects if item.project and (row.name == item.project or row.code == item.project)), None)
+        if project is None:
+            raise HTTPException(status_code=422, detail="Select or create a known project for every commitment")
+        if item.resolved_due_date is None:
+            raise HTTPException(status_code=422, detail=f"Resolve commitment date '{item.due_text}' before confirming")
+        organisation = next((row for row in known_orgs if item.committed_by_org and (row.name == item.committed_by_org or row.short_name == item.committed_by_org or item.committed_by_org in (row.aliases or []))), None)
+        db.add(Commitment(project_id=project.id, statement=item.statement, committed_by_org_id=organisation.id if organisation else None, committed_by_text=item.committed_by_text, due_date=item.resolved_due_date, due_text=item.due_text, precision=item.deadline_precision, status="pending", source_document_id=document.id, source_quote=item.source_quote))
+    for item in data.decisions:
+        if not item.quote_verified:
+            raise HTTPException(status_code=422, detail="Verify every extracted decision quote before confirming")
+    db.flush()
+    touched = {action.project_id for action in created_actions if action.project_id}
+    touched.update(item.project_id for item in db.scalars(select(Commitment).where(Commitment.source_document_id == document.id)))
+    for project_id in touched:
+        project = db.get(Project, project_id)
+        if project:
+            recompute_project_health(db, project)
     review.status = "confirmed"
-    review.diff_summary = f"Added {len(created_actions)} action(s) and {len(data.commitments)} commitment(s); indexed document '{document.title}'."
+    review.diff_summary = f"Added {len(created_actions)} action(s), {len(data.commitments)} commitment(s), and {len(data.decisions)} decision(s); linked to {project_for_hint.name if project_for_hint else 'no project'}; indexed '{document.title}'."
     document.ingest_status = "ready"
     index_intake_document(db, document)
     add_audit_event(db, actor, request, action="intake_confirmed", entity_type="intake_review", entity_id=review.id, after={"document_id": document.id, "action_ids": [item.id for item in created_actions], "commitments": len(data.commitments), "summary": review.diff_summary})

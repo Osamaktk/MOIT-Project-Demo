@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Activity, ArrowDownRight, ArrowUpRight, Building2, CalendarDays, FileClock, Printer, UsersRound, X } from 'lucide-react'
+import { Activity, ArrowDownRight, ArrowUpRight, Building2, CalendarDays, FileClock, Printer, Upload, UsersRound, X } from 'lucide-react'
 import { getDashboard, getDashboardDrill, type DrillRecord } from '../../lib/api'
 
 function dateLabel(value: string, language = 'en'): string {
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const { t, i18n } = useTranslation()
   const [weekEnding, setWeekEnding] = useState('')
   const [drill, setDrill] = useState<{ kpi: string; stage?: string } | null>(null)
+  const [dropActive, setDropActive] = useState(false)
   const dashboard = useQuery({ queryKey: ['dashboard', weekEnding], queryFn: () => getDashboard(weekEnding || undefined) })
   const selectedWeek = weekEnding || dashboard.data?.week_ending || ''
   const navigate = useNavigate()
@@ -42,7 +43,8 @@ export default function DashboardPage() {
     setDrill(null)
   }
 
-  return <div className="dashboard-page">
+  return <div className="dashboard-page" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDropActive(true) } }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false) }} onDrop={event => { event.preventDefault(); setDropActive(false); const dropped = event.dataTransfer.files[0]; if (dropped) navigate('/documents', { state: { intakeFile: dropped } }) }}>
+    {dropActive && <div className="dashboard-drop-overlay"><div><Upload size={24}/><b>Drop to add minutes or a document</b><span>The file will open in your review screen before it is added.</span></div></div>}
     <div className="welcome-row"><div><div className="eyebrow">{t('dashboard.delivery')}</div><h1>{t('shell.commandCenter')}</h1><p>{t('dashboard.summary')}</p></div><div className="dashboard-controls"><label><CalendarDays size={15}/> {t('dashboard.weekEnding')}<input aria-label={t('dashboard.weekEnding')} type="date" value={selectedWeek} onChange={event => setWeekEnding(event.target.value)}/></label><button className="outline-button print-button" onClick={() => window.print()}><Printer size={15}/> {t('dashboard.print')}</button></div></div>
     {dashboard.isError && <div className="dashboard-error" role="alert">{dashboard.error.message}<button onClick={() => void dashboard.refetch()}>{t('dashboard.retry')}</button></div>}
     <div className="dashboard-kpis">{metrics.map(({key,label,value,icon:Icon,color,note})=><button className={`dashboard-kpi ${color}`} key={key} onClick={() => setDrill({kpi:key})} disabled={dashboard.isPending}><span className="dashboard-kpi-head"><span>{label}</span><Icon size={17}/></span><strong>{dashboard.isPending ? '—' : value ?? 0}</strong><small>{note}</small><span className="kpi-open">{t('dashboard.openRecords')} <ArrowUpRight size={12}/></span></button>)}</div>
