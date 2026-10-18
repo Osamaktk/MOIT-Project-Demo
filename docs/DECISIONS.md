@@ -1,5 +1,9 @@
 # Decisions
 
+- **2026-10-18 — Hold confidential uploads before cloud extraction.** The intake screen stores the source locally and waits for an audited administrator decision attached to that document. Extraction remains behind the AI Gateway; indexing after confirmation uses local embeddings.
+- **2026-10-18 — Verify evidence before confirming extracted actions.** Source quotes are matched against extracted document text and checked again on confirmation. A reviewer can correct the quote against the source pane; unresolved owners, projects, and dates block confirmation.
+- **2026-10-18 — Use a separate intake review row and preserve the legacy document API.** The staged migration adds duplicate metadata and review state without changing the existing Records Search upload contract.
+
 - **2026-10-18 — Keep v2 backend credentials in `backend/.env`.** The file is ignored explicitly; `.env.example` stays credential-free. The model-catalogue check uses the public catalogue endpoint without sending the configured secret.
 - **2026-10-18 — Bind Vite to loopback by default.** Development and preview servers are local-only unless a developer deliberately overrides the host.
 - **2026-10-18 — Verify Linux frontend compatibility in CI.** This workstation has no usable WSL distribution, so the Ubuntu workflow runs a clean `npm ci` and production build after the Phase 0 commit is pushed.

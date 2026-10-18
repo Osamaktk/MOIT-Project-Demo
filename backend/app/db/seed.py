@@ -297,7 +297,7 @@ def seed_transactions_dashboard() -> None:
 
 def seed_tool_switches() -> None:
     with SessionLocal() as db:
-        for tool in ("jarvis", "minutes_assistant", "records_search", "brief_generator"):
+        for tool in ("jarvis", "minutes_assistant", "records_search", "brief_generator", "document_extraction"):
             if db.get(ToolSwitch, tool) is None:
                 db.add(ToolSwitch(tool=tool, suspended=False))
         db.commit()

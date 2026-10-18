@@ -10,6 +10,7 @@ from app.api.v1.domain import router as domain_router
 from app.api.v1.decisions import router as decisions_router
 from app.api.v1.engagements import router as engagements_router
 from app.api.v1.health import router as health_router
+from app.api.v1.intake import router as intake_router
 from app.api.v1.jarvis import router as jarvis_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.meetings import router as meetings_router
@@ -35,6 +36,7 @@ app.include_router(assurance_router, prefix="/api/v1")
 app.include_router(meetings_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(records_router)
+app.include_router(intake_router)
 app.include_router(jarvis_router, prefix="/api/v1")
 app.include_router(compliance_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")

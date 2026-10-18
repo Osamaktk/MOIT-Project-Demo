@@ -25,15 +25,15 @@ def _grant(*permissions: str) -> dict[str, list[str]]:
 
 
 ROLE_PRESETS: dict[str, dict[str, list[str]]] = {
-    "minister": _grant("dashboard.view", "projects.view", "actions.view", "actions.approve", "meetings.view", "documents.view", "documents.upload", "documents.approve", "jarvis.view", "jarvis_voice.view"),
-    "secretary": _grant("dashboard.view", "projects.view", "projects.edit", "actions.view", "actions.edit", "actions.approve", "meetings.view", "documents.view", "documents.upload", "documents.approve", "review.view", "jarvis.view", "jarvis_voice.view"),
+    "minister": _grant("dashboard.view", "projects.view", "actions.view", "actions.approve", "meetings.view", "documents.view", "documents.edit", "documents.upload", "documents.approve", "review.view", "review.edit", "jarvis.view", "jarvis_voice.view"),
+    "secretary": _grant("dashboard.view", "projects.view", "projects.edit", "actions.view", "actions.edit", "actions.approve", "meetings.view", "documents.view", "documents.edit", "documents.upload", "documents.approve", "review.view", "review.edit", "jarvis.view", "jarvis_voice.view"),
     "cos": _grant("dashboard.view", "dashboard.edit", "projects.view", "projects.edit", "actions.view", "actions.edit", "actions.approve", "meetings.view", "meetings.edit", "documents.view", "documents.edit", "documents.upload", "documents.approve", "review.view", "review.edit", "review.approve", "jarvis.view", "jarvis_voice.view", "compliance.view", "compliance.edit", "ai_oversight.view", "ai_oversight.edit"),
-    "project_lead": _grant("dashboard.view", "projects.view", "projects.edit", "actions.view", "actions.edit", "meetings.view", "documents.view", "documents.upload", "review.view", "review.edit", "jarvis.view", "jarvis_voice.view"),
-    "legal": _grant("dashboard.view", "actions.view", "meetings.view", "documents.view", "documents.edit", "documents.approve", "compliance.view", "compliance.edit", "jarvis.view"),
+    "project_lead": _grant("dashboard.view", "projects.view", "projects.edit", "actions.view", "actions.edit", "meetings.view", "documents.view", "documents.upload", "documents.approve", "review.view", "review.edit", "jarvis.view", "jarvis_voice.view"),
+    "legal": _grant("dashboard.view", "projects.view", "actions.view", "meetings.view", "documents.view", "documents.edit", "documents.upload", "documents.approve", "review.view", "review.edit", "compliance.view", "compliance.edit", "jarvis.view"),
     "analyst": _grant("dashboard.view", "projects.view", "actions.view", "meetings.view", "ai_oversight.view"),
-    "data_coordinator": _grant("dashboard.view", "documents.view", "documents.edit", "documents.upload", "jarvis.view"),
+    "data_coordinator": _grant("dashboard.view", "projects.view", "actions.view", "documents.view", "documents.edit", "documents.upload", "documents.approve", "review.view", "review.edit", "jarvis.view"),
     "external_org": _grant("actions.view", "actions.edit"),
-    "admin": _grant("admin.view", "admin.edit"),
+    "admin": _grant("admin.view", "admin.edit", "documents.view"),
 }
 
 LEGACY_ROLE_ALIASES = {

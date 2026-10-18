@@ -47,6 +47,17 @@ Record date, operator, total time, and any failure below. Fix the issue and repe
 | 2 | 2026-10-17 | Automated browser (Edge) | 71.35 s | Passed: 17 transactions; 4 KPI totals reconciled; 5 citations; 2 minutes actions; 0 page errors. |
 | 3 | 2026-10-17 | Automated browser (Edge) | 53.75 s | Passed: 17 transactions; 4 KPI totals reconciled; 5 citations; 2 minutes actions; 0 page errors. |
 
+## Phase 2: document intake rehearsal (not yet recorded)
+
+1. Start the backend and frontend using the README commands, then sign in as the Minister or Chief of Staff.
+2. Open **Documents** from the sidebar or **Add document** from the top bar. Upload a supplied local sample PDF or the synthetic look-alike fixture. Confirm the classification is appropriate before submitting.
+3. Compare the source pane with the extracted meeting, owner, project, original deadline words, resolved date, and source quotes. Correct any flagged rows and save the review.
+4. Confirm the upload. The screen should report the number of actions and commitments added; the MoITT dashboard should show the updated counts and project health. Confirming should also make the source searchable.
+5. Repeat with the second sample. Record any extraction, table-layout, duplicate detection, or dashboard issue in the rehearsal table above. Do not mark this phase accepted until both sample PDFs and the synthetic look-alike complete the review and confirmation path.
+
+- Confidential documents remain local until an administrator grants cloud extraction permission to that specific upload. If permission is not granted, route the review to a local provider or leave it pending.
+- If a PDF has no selectable text and OCR is unavailable, the upload shows a readable setup error; do not treat an empty extraction as a completed review.
+
 ## Recovery during a presentation
 
 - If an API request fails, use the visible retry control or reload the page after checking the two local processes.

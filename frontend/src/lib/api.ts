@@ -24,6 +24,7 @@ export type DashboardSummary = {
   overdue_actions: Array<{ id: string; serial_no: number; fy: string; description: string; officer_id: string; officer_name: string; deadline: string; priority: string; status: string; overdue: boolean }>;
   upcoming_engagements: Array<{ id: string; title: string; engagement_type: string; starts_at: string; location: string; pack_status: string; pack_due_at: string; pack_at_risk: boolean; owner_id: string; owner_name: string; transaction_id: string | null; transaction_code: string | null }>;
   last_refreshed: string; source_note: string;
+  moitt?: {active_projects:number;open_actions:number;overdue_actions:number;open_commitments:number;awaiting_confirmation:number;projects:Array<{id:string;code:string;name:string;health:string;stage:string;summary:string}>}
 }
 export type DrillRecord = { record_type: string; id: string; label: string; code?: string; due_date?: string; deadline?: string; starts_at?: string; officer?: string }
 export type DrillResult = { kpi: string; week_starting: string; week_ending: string; total: number; records: DrillRecord[] }
@@ -48,6 +49,12 @@ export type ComplianceItem = {id:string;category:string;title:string;due_date:st
 export type SpotCheck = {id:string;period:string;sample:Array<{run_id:string;tool:string;model:string;zone:string;classification:string;created_at:string;reviewed:boolean}>;reconciled_by:string|null;reconciler_name:string|null;findings:string|null;status:string;creator_id:string;creator_name:string;created_at:string;updated_at:string}
 export type AdminUser = {id:string;name:string;email:string;role:string;designation:string;active:boolean;created_at:string}
 export type SystemHealth = {database:string;environment:string;ai_zone:string;chat_provider_configured:boolean;embedding_provider_configured:boolean;stt_package_installed:boolean;chroma_directory_exists:boolean;configured_models:{chat:string|null;embedding:string|null;stt:string}}
+export type IntakeItem = {description:string;owner_org:string|null;owner_person:string|null;deadline_text:string;resolved_deadline:string|null;deadline_precision:string;status_source:'open'|'done_at_upload';project:string|null;source_quote:string;source_page:number|null;quote_verified:boolean;needs_input:boolean}
+export type IntakeCommitment = {statement:string;committed_by_org:string|null;committed_by_text:string|null;due_text:string;resolved_due_date:string|null;deadline_precision:string;project:string|null;source_quote:string;source_page:number|null;quote_verified:boolean;needs_input:boolean}
+export type IntakePayload = {doc_kind:'minutes'|'letter'|'brief'|'note'|'other';title:string;meeting_date:string|null;chair:string|null;venue:string|null;participants:string[];project_hint:string|null;summary:string;actions:IntakeItem[];commitments:IntakeCommitment[]}
+export type IntakeReview = {id:string;document_id:string;status:string;doc_kind:string;payload:IntakePayload;warnings:string[];diff_summary:string|null;duplicate:boolean}
+export type MoittOrganisation = {id:string;name:string;short_name:string;type:string;aliases:string[]}
+export type MoittProject = {id:string;code:string;name:string;aliases:string[];sector:string;stage:string;health:string;health_reason:string;lead_org_id:string|null;summary:string;updated_at:string}
 
 export async function getHealth(): Promise<HealthStatus> {
   const response = await fetch(`${API}/health`)
@@ -210,6 +217,7 @@ export async function openDocumentSource(id:string,page?:number|null):Promise<vo
   else {const link=document.createElement('a');link.href=target;link.target='_blank';link.rel='noopener';link.click()}
   window.setTimeout(()=>URL.revokeObjectURL(url),60000)
 }
+export async function getDocumentSourceUrl(id:string):Promise<string>{const token=localStorage.getItem('pc-access-token'),response=await fetch(`${API}/api/v1/documents/${id}/source`,{headers:token?{Authorization:`Bearer ${token}`}:{}});if(!response.ok)throw new Error('Could not open this source document.');return URL.createObjectURL(await response.blob())}
 export async function getJarvisSession(id:string):Promise<JarvisSession>{return apiRequest<JarvisSession>(`/api/v1/jarvis/sessions/${id}`)}
 export async function createJarvisSession():Promise<JarvisSession>{return apiRequest<JarvisSession>('/api/v1/jarvis/sessions',{method:'POST'})}
 export async function sendJarvisChat(message:string,sessionId:string|undefined,context:string,onEvent:(name:string,data:Record<string,unknown>)=>void):Promise<void>{
@@ -236,3 +244,14 @@ export async function getAdminUsers():Promise<AdminUser[]>{return apiRequest<Adm
 export async function createAdminUser(values:Record<string,unknown>):Promise<AdminUser>{return apiRequest<AdminUser>('/api/v1/admin/users',{method:'POST',body:JSON.stringify(values)})}
 export async function updateAdminUser(id:string,values:Record<string,unknown>):Promise<AdminUser>{return apiRequest<AdminUser>(`/api/v1/admin/users/${id}`,{method:'PATCH',body:JSON.stringify(values)})}
 export async function getSystemHealth():Promise<SystemHealth>{return apiRequest<SystemHealth>('/api/v1/admin/health')}
+export async function uploadForIntake(file:File,classification:string):Promise<IntakeReview>{const token=localStorage.getItem('pc-access-token'),body=new FormData();body.append('file',file);body.append('classification',classification);const response=await fetch(`${API}/api/v1/intake`,{method:'POST',headers:token?{Authorization:`Bearer ${token}`}:{},body});if(!response.ok){const error=await response.json().catch(()=>null) as {detail?:string}|null;throw new Error(error?.detail??'Could not process this document.')}return response.json() as Promise<IntakeReview>}
+export async function getIntakeReviews():Promise<IntakeReview[]>{return apiRequest<IntakeReview[]>('/api/v1/intake')}
+export async function getIntakeReview(id:string):Promise<IntakeReview>{return apiRequest<IntakeReview>(`/api/v1/intake/${id}`)}
+export async function updateIntakeReview(id:string,payload:IntakePayload):Promise<IntakeReview>{return apiRequest<IntakeReview>(`/api/v1/intake/${id}`,{method:'PATCH',body:JSON.stringify({payload})})}
+export async function confirmIntakeReview(id:string):Promise<IntakeReview>{return apiRequest<IntakeReview>(`/api/v1/intake/${id}/confirm`,{method:'POST'})}
+export async function handoffIntakeReview(id:string):Promise<IntakeReview>{return apiRequest<IntakeReview>(`/api/v1/intake/${id}/handoff`,{method:'POST'})}
+export async function setIntakeCloudPermission(id:string,allowed:boolean):Promise<IntakeReview>{return apiRequest<IntakeReview>(`/api/v1/intake/${id}/cloud-permission`,{method:'PATCH',body:JSON.stringify({allowed})})}
+export async function extractPermittedIntake(id:string):Promise<IntakeReview>{return apiRequest<IntakeReview>(`/api/v1/intake/${id}/extract`,{method:'POST'})}
+export async function discardIntakeReview(id:string):Promise<void>{const token=localStorage.getItem('pc-access-token'),response=await fetch(`${API}/api/v1/intake/${id}`,{method:'DELETE',headers:token?{Authorization:`Bearer ${token}`}:{}});if(!response.ok){const error=await response.json().catch(()=>null) as {detail?:string}|null;throw new Error(error?.detail??'Could not discard this upload.')}}
+export async function listMoittOrganisations():Promise<MoittOrganisation[]>{return apiRequest<MoittOrganisation[]>('/api/v1/organisations')}
+export async function listMoittProjects():Promise<MoittProject[]>{return apiRequest<MoittProject[]>('/api/v1/projects')}

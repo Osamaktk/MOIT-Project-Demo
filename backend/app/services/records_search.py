@@ -211,6 +211,25 @@ def ingest_document(db: Session, *, title: str, doc_type: str, classification: s
     return document
 
 
+def index_intake_document(db: Session, document: Document) -> None:
+    """Index an already saved intake source using local embeddings only."""
+    if db.scalar(select(DocumentChunk.id).where(DocumentChunk.document_id == document.id)):
+        return
+    rows = split_chunks([(1, document.text_extracted)])
+    if not rows:
+        raise ValueError("No searchable text chunks were created")
+    collection = chroma_collection()
+    ids = [str(uuid4()) for _ in rows]
+    vectors = [embed_local(row["text"]) for row in rows]
+    db.add_all([DocumentChunk(document_id=document.id, chunk_index=index, vector_id=ids[index], **row) for index, row in enumerate(rows)])
+    collection.add(
+        ids=ids,
+        embeddings=vectors,
+        documents=[row["text"] for row in rows],
+        metadatas=[{"document_id": document.id, "classification": document.classification, "doc_type": document.doc_type, "transaction_id": ""} for _ in rows],
+    )
+
+
 def lexical_scores(query: str, chunks: list[DocumentChunk]) -> dict[str, float]:
     terms = tokenize(query)
     docs = [tokenize(chunk.text) for chunk in chunks]

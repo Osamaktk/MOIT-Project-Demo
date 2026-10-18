@@ -1,5 +1,6 @@
 .env
 backend/.env
+backend/samples/ministry/
 .venv/
 venv/
 __pycache__/

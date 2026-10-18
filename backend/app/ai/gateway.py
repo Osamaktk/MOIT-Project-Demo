@@ -68,7 +68,7 @@ class AIGateway:
         db.commit()
         return run
 
-    async def chat(self, db: Session, *, tool: str, role: str, messages: list[dict[str, Any]], classification: str = "internal", is_synthetic: bool = False, user_id: str | None = None, prompt_version: str = "unversioned", tools: list[dict[str, Any]] | None = None, response_schema: type[T] | None = None, run_id_out: dict[str, str] | None = None, stream: bool = False) -> str | T:
+    async def chat(self, db: Session, *, tool: str, role: str, messages: list[dict[str, Any]], classification: str = "internal", is_synthetic: bool = False, user_id: str | None = None, prompt_version: str = "unversioned", tools: list[dict[str, Any]] | None = None, response_schema: type[T] | None = None, run_id_out: dict[str, str] | None = None, stream: bool = False, allow_confidential_cloud: bool = False) -> str | T:
         if classification not in {"public", "internal", "confidential"}:
             raise ValueError("Unknown data classification")
         provider = self._provider(role)
@@ -81,7 +81,7 @@ class AIGateway:
             switch = db.get(ToolSwitch, tool)
             if switch is None or switch.suspended:
                 raise ToolSuspended(f"{tool} is suspended. Contact an assurance administrator.")
-            if provider.zone == "cloud" and classification == "confidential" and not (is_synthetic and self.config.allow_cloud_for_synthetic_demo):
+            if provider.zone == "cloud" and classification == "confidential" and not (is_synthetic and self.config.allow_cloud_for_synthetic_demo) and not allow_confidential_cloud:
                 raise PolicyViolation("Confidential data is blocked from cloud AI providers.")
             if not model:
                 raise AIConfigurationError(f"No model is configured for the {role} role.")

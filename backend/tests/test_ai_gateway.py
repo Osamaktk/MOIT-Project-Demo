@@ -105,6 +105,19 @@ def test_synthetic_confidential_cloud_exception_is_explicit(ai_db) -> None:
     assert run is not None and run.outcome == "success" and run.is_synthetic is True
 
 
+def test_document_level_admin_permission_allows_confidential_extraction(ai_db) -> None:
+    db, person = ai_db
+    db.add(ToolSwitch(tool="document_extraction", suspended=False))
+    db.commit()
+    provider = MockProvider()
+    gateway = AIGateway(Settings(model_extraction="catalogue/extract", allow_cloud_for_synthetic_demo=False), provider=provider)
+    response = asyncio.run(gateway.chat(db, tool="document_extraction", role="extraction", messages=[], classification="confidential", user_id=person.id, allow_confidential_cloud=True))
+    assert response == "synthetic response"
+    run = db.scalar(select(AIRun).where(AIRun.tool == "document_extraction"))
+    assert provider.calls == 1
+    assert run is not None and run.outcome == "success" and run.classification == "confidential"
+
+
 def test_zone_mode_selects_provider_without_code_changes() -> None:
     cloud = AIGateway(Settings(ai_zone_mode="cloud"))
     local = AIGateway(Settings(ai_zone_mode="cloud", ai_provider_chat="local"))

@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.constants import TRANSACTION_STAGES
-from app.db.models import Engagement, MinisterDecision, RegisterEntry, Transaction
+from app.db.models import Action, Commitment, Engagement, IntakeReview, MinisterDecision, Project, RegisterEntry, Transaction
 from app.services.register import is_overdue
 
 
@@ -50,6 +50,9 @@ def dashboard_summary(db: Session, week_ending: date | None) -> dict[str, Any]:
     for transaction in transactions:
         stage_counts[transaction.stage] = stage_counts.get(transaction.stage, 0) + 1
     next_milestones = sorted(transactions, key=lambda item: (item.next_milestone_date, item.code))[:8]
+    moitt_projects = db.scalars(select(Project).order_by(Project.updated_at.desc(), Project.name)).all()
+    active_projects = [project for project in moitt_projects if project.stage not in {"completed", "cancelled", "closed"}]
+    moitt_overdue = db.scalar(select(func.count()).select_from(Action).where(Action.review_state == "approved", Action.deadline < now.date(), Action.status.not_in(("closed", "closed_with_note")))) or 0
     return {
         "week_starting": start,
         "week_ending": end,
@@ -64,6 +67,14 @@ def dashboard_summary(db: Session, week_ending: date | None) -> dict[str, Any]:
         "decisions_due": [decision_summary(item) for item in decisions],
         "overdue_actions": [register_summary(item) for item in overdue],
         "upcoming_engagements": [engagement_summary(item, now) for item in engagements],
+        "moitt": {
+            "active_projects": len(active_projects),
+            "open_actions": db.scalar(select(func.count()).select_from(Action).where(Action.review_state == "approved", Action.status.not_in(("closed", "closed_with_note")))) or 0,
+            "overdue_actions": moitt_overdue,
+            "open_commitments": db.scalar(select(func.count()).select_from(Commitment).where(Commitment.status == "pending")) or 0,
+            "awaiting_confirmation": db.scalar(select(func.count()).select_from(IntakeReview).where(IntakeReview.status == "review")) or 0,
+            "projects": [{"id": project.id, "code": project.code, "name": project.name, "health": project.health, "stage": project.stage, "summary": project.summary} for project in active_projects[:6]],
+        },
         "last_refreshed": now,
         "source_note": "Transactions, minister decisions, engagements, and approved Register entries.",
     }

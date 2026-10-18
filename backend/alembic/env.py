@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db.models import AIRun, AuditEvent, ChatMessage, ChatSession, ComplianceItem, Document, DocumentChunk, Engagement, Meeting, MeetingAction, MinisterDecision, MinutesDraft, RegisterEntry, RegisterSerialCounter, SpotCheck, ToolSwitch, Transcript, Transaction, TransactionEvent, User  # noqa: F401
+from app.db.models import AIRun, AuditEvent, ChatMessage, ChatSession, ComplianceItem, Document, DocumentChunk, Engagement, IntakeReview, Meeting, MeetingAction, MinisterDecision, MinutesDraft, RegisterEntry, RegisterSerialCounter, SpotCheck, ToolSwitch, Transcript, Transaction, TransactionEvent, User  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

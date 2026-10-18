@@ -9,6 +9,7 @@ from app.db.models.entities import (
     Document,
     DocumentChunk,
     Engagement,
+    IntakeReview,
     Job,
     Meeting,
     MeetingAction,
@@ -30,7 +31,7 @@ from app.db.models.entities import (
 
 __all__ = [
     "AIRun", "Action", "AuditEvent", "ChatMessage", "ChatSession", "Commitment",
-    "ComplianceItem", "Document", "DocumentChunk", "Engagement", "Job", "Meeting",
+    "ComplianceItem", "Document", "DocumentChunk", "Engagement", "IntakeReview", "Job", "Meeting",
     "MeetingAction", "MinisterDecision", "MinutesDraft", "Organisation", "Project",
     "RegisterEntry", "RegisterSerialCounter", "RolePreset", "SpotCheck",
     "ToolSwitch", "Transaction", "TransactionEvent", "Transcript", "User", "UserPermission",

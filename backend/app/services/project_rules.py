@@ -53,10 +53,11 @@ def normalize_deadline(
         month = MONTHS[week.group(1)]
         return DeadlineResolution(date(int(week.group(2)), month, min(7, calendar.monthrange(int(week.group(2)), month)[1])), "week")
 
-    relative = re.search(r"(?:within\s+)?(\d+)\s+days?(?:\s+from\s+(?:contractor\s+)?mobilization)?", original)
+    relative = re.search(r"(?:within\s+)?(\d+)\s+days?(?:\s+(?:from|after|of)\s+(?:the\s+)?(?:contractor\s+)?mobilization)?", original)
     if relative:
-        anchor = mobilization_date if "mobilization" in original else meeting_date
-        if "mobilization" in original and anchor is None:
+        uses_mobilization = "mobilization" in original
+        anchor = mobilization_date if uses_mobilization else meeting_date
+        if uses_mobilization and anchor is None:
             return DeadlineResolution(None, "relative", True)
         return DeadlineResolution(anchor + timedelta(days=int(relative.group(1))), "relative")
 

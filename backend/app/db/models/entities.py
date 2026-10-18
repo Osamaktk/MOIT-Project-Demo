@@ -352,10 +352,30 @@ class Document(TimestampMixin, Base):
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     text_extracted: Mapped[str] = mapped_column(String, nullable=False)
     source_note: Mapped[str | None] = mapped_column(String(1000))
+    sha256: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    uploaded_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    cloud_ai_allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ingest_status: Mapped[str] = mapped_column(String(24), default="ready", index=True, nullable=False)
     transaction: Mapped[Transaction | None] = relationship()
     chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+
+
+class IntakeReview(TimestampMixin, Base):
+    __tablename__ = "intake_reviews"
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), unique=True, index=True, nullable=False)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    assigned_to: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="review", index=True, nullable=False)
+    was_edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    doc_kind: Mapped[str] = mapped_column(String(24), default="other", nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    warnings: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    ai_run_id: Mapped[str | None] = mapped_column(ForeignKey("ai_runs.id"))
+    diff_summary: Mapped[str | None] = mapped_column(String(2000))
+    document: Mapped[Document] = relationship()
+    owner: Mapped[User] = relationship(foreign_keys=[owner_id])
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[assigned_to])
 
 
 class DocumentChunk(TimestampMixin, Base):
