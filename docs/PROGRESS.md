@@ -16,6 +16,20 @@
 
 Acceptance passed: clean Windows and Linux frontend installs/builds, local-only Vite defaults, no U+00C2/U+00C3 mojibake markers, and 56 backend tests passing. Phase 1 has not started.
 
+### Phase 1 — Domain model and permissions foundation (accepted)
+
+- [x] Add MoITT organisations, projects, actions, commitments, role presets, user overrides, organisation scope, and document clearance models.
+- [x] Add explainable project health calculation and deadline normalization, including working-day "Immediate", "Next Meeting" input handling, explicit dates, first-week dates, and anchored relative commitments.
+- [x] Add project, organisation, and action APIs with capability checks; actions remain unnumbered proposals until an authorized person confirms them.
+- [x] Add nine synthetic MoITT role presets/users and synthetic IT Park Islamabad and Pakistan Asaan Khidmat Centres records to the idempotent seed.
+- [x] Update `ARCHITECTURE.md` to the approved v2 specification; update README setup and run commands.
+- [x] Run the full backend suite: 67 passed. Fresh SQLite migration + seed and `alembic check` passed with no drift.
+- [x] Build the frontend, run doctor (11/11), parse-check PowerShell and Bash launchers, and scan the repository: no U+00C2/U+00C3 mojibake markers.
+- [x] Run the updated backend against a fresh seeded SQLite database: health returned 200, the Minister read both MoITT projects and actions, and the Admin project request returned 403.
+- [x] Capture the backend API screenshot: [`docs/screenshots/phase-1/projects-api.png`](screenshots/phase-1/projects-api.png).
+
+Acceptance passed: project/organisation/action/commitment models, rule tests, permission matrix, and role-scoped API checks are complete. The backend services were stopped after the screenshot so ports 8000 and 5173 are clear for the user to run locally. Phase 2 has not started.
+
 ## Phase 0 — Foundation (accepted)
 
 - [x] Initial repository structure and source architecture copy.

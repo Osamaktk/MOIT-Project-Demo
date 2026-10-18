@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
 set -eu
 cd "$(dirname "$0")/../backend"
-.venv/bin/python -m app.db.seed
+PYTHON=${MOITT_PYTHON:-python3}
+"$PYTHON" -m app.db.seed

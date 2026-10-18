@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -27,6 +27,8 @@ class User(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     designation: Mapped[str] = mapped_column(String(120), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    document_clearance: Mapped[str] = mapped_column(String(24), default="internal", nullable=False)
+    organisation_id: Mapped[str | None] = mapped_column(ForeignKey("organisations.id"), index=True)
     audit_events: Mapped[list["AuditEvent"]] = relationship(back_populates="actor")
 
 
@@ -106,6 +108,100 @@ class TransactionEvent(TimestampMixin, Base):
     transaction: Mapped[Transaction] = relationship(back_populates="events")
 
 
+class Organisation(TimestampMixin, Base):
+    __tablename__ = "organisations"
+
+    name: Mapped[str] = mapped_column(String(180), unique=True, nullable=False)
+    short_name: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
+    type: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    aliases: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+
+
+class Project(TimestampMixin, Base):
+    __tablename__ = "projects"
+
+    code: Mapped[str] = mapped_column(String(24), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(180), index=True, nullable=False)
+    aliases: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    sector: Mapped[str] = mapped_column(String(80), nullable=False)
+    stage: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    health: Mapped[str] = mapped_column(String(20), index=True, default="on_track", nullable=False)
+    health_reason: Mapped[str] = mapped_column(String(1000), nullable=False)
+    lead_org_id: Mapped[str | None] = mapped_column(ForeignKey("organisations.id"), index=True)
+    summary: Mapped[str] = mapped_column(String(2000), nullable=False)
+    lead_org: Mapped[Organisation | None] = relationship()
+
+
+class Action(TimestampMixin, Base):
+    __tablename__ = "actions"
+    __table_args__ = (
+        UniqueConstraint("fy", "serial_no", name="uq_action_fy_serial"),
+        CheckConstraint("owner_org_id IS NOT NULL OR length(trim(owner_person_name)) > 0", name="ck_action_has_owner"),
+    )
+
+    serial_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fy: Mapped[str] = mapped_column(String(7), index=True, nullable=False)
+    description: Mapped[str] = mapped_column(String(4000), nullable=False)
+    owner_org_id: Mapped[str | None] = mapped_column(ForeignKey("organisations.id"), index=True)
+    owner_person_name: Mapped[str | None] = mapped_column(String(160))
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline: Mapped[date | None] = mapped_column(Date, index=True)
+    deadline_text: Mapped[str] = mapped_column(String(255), nullable=False)
+    deadline_precision: Mapped[str] = mapped_column(String(16), nullable=False)
+    priority: Mapped[str] = mapped_column(String(1), default="B", nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="open", index=True, nullable=False)
+    status_source: Mapped[str] = mapped_column(String(24), default="open", nullable=False)
+    review_state: Mapped[str] = mapped_column(String(20), default="proposed", index=True, nullable=False)
+    origin: Mapped[str] = mapped_column(String(20), default="manual", nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"), index=True)
+    source_document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), index=True)
+    source_quote: Mapped[str | None] = mapped_column(String(2000))
+    source_page: Mapped[int | None] = mapped_column(Integer)
+    project: Mapped[Project | None] = relationship()
+    owner_org: Mapped[Organisation | None] = relationship()
+    owner_user: Mapped[User | None] = relationship()
+
+
+class Commitment(TimestampMixin, Base):
+    __tablename__ = "commitments"
+
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True, nullable=False)
+    statement: Mapped[str] = mapped_column(String(2000), nullable=False)
+    committed_by_org_id: Mapped[str | None] = mapped_column(ForeignKey("organisations.id"), index=True)
+    committed_by_text: Mapped[str | None] = mapped_column(String(255))
+    due_date: Mapped[date | None] = mapped_column(Date, index=True)
+    due_text: Mapped[str] = mapped_column(String(255), nullable=False)
+    precision: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True, nullable=False)
+    source_document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), index=True)
+    source_quote: Mapped[str | None] = mapped_column(String(2000))
+    project: Mapped[Project] = relationship()
+    committed_by_org: Mapped[Organisation | None] = relationship()
+
+
+class RolePreset(TimestampMixin, Base):
+    __tablename__ = "roles"
+
+    key: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    permissions: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class UserPermission(Base):
+    __tablename__ = "user_permissions"
+    __table_args__ = (UniqueConstraint("user_id", "permission_key", name="uq_user_permission_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    permission_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    changed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+
+
 class MinisterDecision(TimestampMixin, Base):
     __tablename__ = "minister_decisions"
 
@@ -177,6 +273,10 @@ class Meeting(TimestampMixin, Base):
     occasion_type: Mapped[str] = mapped_column(String(24), nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     attendees: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    chair: Mapped[str | None] = mapped_column(String(255))
+    venue: Mapped[str | None] = mapped_column(String(255))
+    participants: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    source_document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), index=True)
     audio_path: Mapped[str | None] = mapped_column(String(500))
     language_hint: Mapped[str] = mapped_column(String(20), default="en", nullable=False)
     classification: Mapped[str] = mapped_column(String(24), default="confidential", nullable=False)

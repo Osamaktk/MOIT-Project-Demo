@@ -6,8 +6,9 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from app.core.config import REPO_ROOT, settings
+from app.core.permissions import ROLE_PRESETS
 from app.core.security import hash_password
-from app.db.models import ComplianceItem, Document, Engagement, Meeting, MinisterDecision, RegisterEntry, RegisterSerialCounter, ToolSwitch, Transcript, Transaction, TransactionEvent, User
+from app.db.models import Action, Commitment, ComplianceItem, Document, Engagement, Meeting, MinisterDecision, Organisation, Project, RegisterEntry, RegisterSerialCounter, RolePreset, ToolSwitch, Transcript, Transaction, TransactionEvent, User
 from app.services.register import financial_year_for
 from app.db.session import SessionLocal
 from app.services.records_search import ingest_document
@@ -23,6 +24,98 @@ PERSONAS = (
     ("Noor Hassan", "data.coordinator@demo.example", "data_coordinator", "AI Data Coordinator"),
     ("Zain Qureshi", "admin@demo.example", "admin", "System Administrator"),
 )
+
+MOITT_PERSONAS = (
+    ("Federal Minister", "minister@moitt.demo", "minister", "Federal Minister", "MoITT", "confidential"),
+    ("Federal Secretary IT", "secretary@moitt.demo", "secretary", "Federal Secretary IT", "MoITT", "confidential"),
+    ("Private Secretary / Chief of Staff", "ps@moitt.demo", "cos", "Chief of Staff", "MoITT", "confidential"),
+    ("Joint Secretary (Dev)", "js.dev@moitt.demo", "project_lead", "Joint Secretary (Development)", "MoITT", "internal"),
+    ("Legal Adviser", "legal@moitt.demo", "legal", "Legal Adviser", "MoITT", "internal"),
+    ("Dashboard Analyst", "analyst@moitt.demo", "analyst", "Dashboard Analyst", "MoITT", "internal"),
+    ("Records Coordinator", "records@moitt.demo", "data_coordinator", "Records Coordinator", "MoITT", "internal"),
+    ("PSEB Liaison", "pseb.liaison@moitt.demo", "external_org", "PSEB Liaison", "PSEB", "public"),
+    ("System Administrator", "admin@moitt.demo", "admin", "System Administrator", "MoITT", "internal"),
+)
+
+ORGANISATIONS = (
+    ("Ministry of IT and Telecommunication", "MoITT", "ministry", ["Ministry of IT & Telecommunication", "Ministry of IT and Telecommunication"]),
+    ("Pakistan Software Export Board", "PSEB", "attached_dept", ["Pakistan Software Export Board", "PSEB"]),
+    ("Capital Development Authority", "CDA", "authority", ["Capital Development Authority", "CDA"]),
+    ("National Information Technology Board", "NITB", "attached_dept", ["National Information Technology Board", "NITB"]),
+    ("Government of Azad Jammu and Kashmir", "AJK Govt", "provincial", ["AJK Government", "Government of AJK"]),
+    ("Government of Gilgit-Baltistan", "GB Govt", "provincial", ["GB Government", "Government of Gilgit-Baltistan"]),
+)
+
+ROLE_NAMES = {
+    "minister": ("Minister", "Federal minister with office-wide read and approval access."),
+    "secretary": ("Secretary", "Office-wide access for the Federal Secretary IT."),
+    "cos": ("Chief of Staff", "Coordinates office actions, review and AI oversight."),
+    "project_lead": ("Project Lead", "Maintains assigned projects and their actions."),
+    "legal": ("Legal Adviser", "Reviews documents, actions and compliance."),
+    "analyst": ("Analyst", "Views office dashboards and AI oversight."),
+    "data_coordinator": ("Records Coordinator", "Uploads and classifies office documents."),
+    "external_org": ("External Organisation", "Views and updates scoped organisation actions."),
+    "admin": ("Administrator", "Manages system access and settings."),
+}
+
+
+def seed_permission_foundation() -> None:
+    with SessionLocal() as db:
+        organisations = {}
+        for name, short_name, kind, aliases in ORGANISATIONS:
+            organisation = db.scalar(select(Organisation).where(Organisation.short_name == short_name))
+            if organisation is None:
+                organisation = Organisation(name=name, short_name=short_name, type=kind, aliases=aliases)
+                db.add(organisation)
+            organisations[short_name] = organisation
+        db.flush()
+
+        for key, permissions in ROLE_PRESETS.items():
+            name, description = ROLE_NAMES[key]
+            preset = db.scalar(select(RolePreset).where(RolePreset.key == key))
+            if preset is None:
+                db.add(RolePreset(key=key, name=name, description=description, permissions=permissions))
+            else:
+                preset.name, preset.description, preset.permissions = name, description, permissions
+
+        for name, email, role, designation, org_short, clearance in MOITT_PERSONAS:
+            user = db.scalar(select(User).where(User.email == email))
+            if user is None:
+                user = User(name=name, email=email, role=role, designation=designation, password_hash=hash_password(DEMO_PASSWORD))
+                db.add(user)
+            user.document_clearance = clearance
+            user.organisation_id = organisations[org_short].id
+
+        legacy_org = organisations["MoITT"]
+        for user in db.scalars(select(User).where(User.email.like("%@demo.example"))):
+            user.document_clearance = "confidential" if user.role in {"minister", "cos", "admin"} else "internal"
+            user.organisation_id = organisations["PSEB"].id if user.role == "liaison" else legacy_org.id
+        db.commit()
+
+
+def seed_moitt_domain_data() -> None:
+    today = date.today()
+    with SessionLocal() as db:
+        if db.scalar(select(func.count()).select_from(Project)):
+            return
+        organisations = {org.short_name: org for org in db.scalars(select(Organisation))}
+        rows = [
+            Project(code="MOITT-ITP", name="IT Park Islamabad", aliases=["IT Park", "Islamabad IT Park"], sector="Digital infrastructure", stage="implementation", health="on_track", health_reason="No overdue actions or near-term unmet commitments.", lead_org_id=organisations["MoITT"].id, summary="Synthetic demonstration project for the Islamabad IT Park."),
+            Project(code="MOITT-AKC", name="Pakistan Asaan Khidmat Centres", aliases=["Pak Asaan Khidmat Centres", "Asaan Khidmat Centres"], sector="Digital public services", stage="monitoring", health="on_track", health_reason="No overdue actions or near-term unmet commitments.", lead_org_id=organisations["MoITT"].id, summary="Synthetic demonstration project for Pakistan Asaan Khidmat Centres."),
+        ]
+        db.add_all(rows)
+        db.flush()
+        fy = financial_year_for(today)
+        db.add_all([
+            Action(fy=fy, serial_no=1, description="Confirm the next construction coordination checkpoint for the Islamabad IT Park.", owner_org_id=organisations["CDA"].id, owner_person_name="Project coordination focal person", occurred_at=datetime.combine(today, time(10), tzinfo=timezone.utc), deadline=today + timedelta(days=14), deadline_text="Within two weeks", deadline_precision="relative", priority="B", status="open", status_source="open", project_id=rows[0].id),
+            Action(fy=fy, serial_no=2, description="Share the next service-centre rollout status with the ministry.", owner_org_id=organisations["AJK Govt"].id, owner_person_name=None, occurred_at=datetime.combine(today - timedelta(days=6), time(10), tzinfo=timezone.utc), deadline=today - timedelta(days=3), deadline_text="Immediate", deadline_precision="relative", priority="A", status="open", status_source="open", project_id=rows[1].id),
+        ])
+        db.add(Commitment(project_id=rows[0].id, statement="Complete the next implementation checkpoint and report readiness.", committed_by_org_id=organisations["CDA"].id, committed_by_text="CDA project team", due_date=today + timedelta(days=60), due_text="Within the current quarter", precision="month", status="pending"))
+        db.flush()
+        from app.services.project_rules import recompute_project_health
+        for project in rows:
+            recompute_project_health(db, project, as_of=today)
+        db.commit()
 
 
 def seed_demo_users() -> None:
@@ -288,8 +381,10 @@ def seed_compliance_items() -> None:
 
 if __name__ == "__main__":
     seed_demo_users()
+    seed_permission_foundation()
     seed_register_entries()
     seed_transactions_dashboard()
+    seed_moitt_domain_data()
     seed_tool_switches()
     seed_meeting_sample()
     seed_sample_documents()

@@ -1,3 +1,4 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..\backend')
-& .\.venv\Scripts\python.exe -m app.db.seed
+$python = if ($env:MOITT_PYTHON) { $env:MOITT_PYTHON } else { 'python' }
+& $python -m app.db.seed

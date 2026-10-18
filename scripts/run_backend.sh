@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 cd "$(dirname "$0")/../backend"
-.venv/bin/alembic upgrade head
-.venv/bin/python -m uvicorn app.main:app --reload
+PYTHON=${MOITT_PYTHON:-python3}
+"$PYTHON" -m alembic upgrade head
+"$PYTHON" -m app.db.seed
+"$PYTHON" -m uvicorn app.main:app --reload --host 127.0.0.1

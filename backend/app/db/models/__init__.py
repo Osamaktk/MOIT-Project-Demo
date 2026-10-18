@@ -1,3 +1,37 @@
-from app.db.models.entities import AIRun, AuditEvent, ChatMessage, ChatSession, ComplianceItem, Document, DocumentChunk, Engagement, Job, Meeting, MeetingAction, MinisterDecision, MinutesDraft, RegisterEntry, RegisterSerialCounter, SpotCheck, ToolSwitch, Transcript, Transaction, TransactionEvent, User
+from app.db.models.entities import (
+    AIRun,
+    Action,
+    AuditEvent,
+    ChatMessage,
+    ChatSession,
+    Commitment,
+    ComplianceItem,
+    Document,
+    DocumentChunk,
+    Engagement,
+    Job,
+    Meeting,
+    MeetingAction,
+    MinisterDecision,
+    MinutesDraft,
+    Organisation,
+    Project,
+    RegisterEntry,
+    RegisterSerialCounter,
+    RolePreset,
+    SpotCheck,
+    ToolSwitch,
+    Transaction,
+    TransactionEvent,
+    Transcript,
+    User,
+    UserPermission,
+)
 
-__all__ = ["AIRun", "AuditEvent", "ChatMessage", "ChatSession", "ComplianceItem", "Document", "DocumentChunk", "Engagement", "Job", "Meeting", "MeetingAction", "MinisterDecision", "MinutesDraft", "RegisterEntry", "RegisterSerialCounter", "SpotCheck", "ToolSwitch", "Transcript", "Transaction", "TransactionEvent", "User"]
+__all__ = [
+    "AIRun", "Action", "AuditEvent", "ChatMessage", "ChatSession", "Commitment",
+    "ComplianceItem", "Document", "DocumentChunk", "Engagement", "Job", "Meeting",
+    "MeetingAction", "MinisterDecision", "MinutesDraft", "Organisation", "Project",
+    "RegisterEntry", "RegisterSerialCounter", "RolePreset", "SpotCheck",
+    "ToolSwitch", "Transaction", "TransactionEvent", "Transcript", "User", "UserPermission",
+]

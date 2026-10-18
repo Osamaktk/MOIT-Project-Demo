@@ -1,10 +1,10 @@
-# PC Command Center
+# MoITT Command Center
 
-Demo foundation for the Privatisation Commission Chairman's office, built phase by phase from [`ARCHITECTURE.md`](ARCHITECTURE.md). All seeded people, records, and transaction names are fictional.
+The Minister's office workspace is being rebuilt phase by phase from [`ARCHITECTURE.md`](ARCHITECTURE.md). New MoITT project and organisation data is synthetic. Legacy demo endpoints remain available while the later UI phases replace their screens.
 
 ## Current status
 
-Phases 0-8 are accepted: Foundation, Decision & Action Register, Transactions and Dashboard, AI Gateway and Assurance, Minutes Assistant, Records Search, Jarvis, Compliance, Spot-checks, and Admin. The repository includes central configuration, database migrations, eight synthetic role personas, authentication/RBAC, audit records, an audited Register workflow, a 17-transaction portfolio, a Friday dashboard with source-record drill-downs, provider/policy/assurance controls, evidence-linked minutes, clearance-filtered search, a grounded records assistant with proposal-only actions, a fortnight compliance calendar, monthly spot-check reconciliation, and user administration. Three full live-extraction browser rehearsals passed in 68.32 s, 71.35 s, and 53.75 s; detailed checks are in `docs/DEMO_SCRIPT.md`. Live audio transcription downloads the configured faster-whisper model on first use.
+The earlier PC Command Center build remains available as a compatibility layer. MoITT v2 Phase 0 is accepted; Phase 1 adds the MoITT domain model and permission foundation. Follow [`docs/PROGRESS.md`](docs/PROGRESS.md) for current acceptance status. Phase 1 introduces `/api/v1/projects`, `/api/v1/actions`, and `/api/v1/organisations`; older screens and routes will be replaced in later phases.
 
 ## Requirements
 
@@ -16,41 +16,33 @@ Phases 0-8 are accepted: Foundation, Decision & Action Register, Transactions an
 
 1. Install Python 3.11+ and Node.js 20.19+ or 22.12+. Confirm `python --version` and `node --version` work in a new terminal.
 2. From the repository root, copy `.env.example` to `backend/.env` (`Copy-Item .env.example backend/.env` in PowerShell; `cp .env.example backend/.env` in Bash). Replace `SECRET_KEY` with a private random value of at least 32 characters. The example selects OpenRouter and `nvidia/nemotron-3-super-120b-a12b:free` for extraction; add your key to `OPENROUTER_API_KEY` to draft meeting minutes live. The selected free route advertised JSON/structured-output support and zero token pricing in the OpenRouter catalogue on 2026-10-17. Verify the model ID from `backend/` with `python scripts/verify_openrouter_models.py`. Keep credentials only in the ignored `backend/.env` file.
-3. Create and initialize the backend from the repository root:
+3. Install backend requirements once in the Python environment you will use. On this workstation, reuse the agent environment by setting `MOITT_PYTHON` to its interpreter; no project-local virtual environment is required.
 
    ```powershell
-   cd backend
-   python -m venv .venv
-   # Windows PowerShell:
-   .\.venv\Scripts\Activate.ps1
-   # macOS/Linux, use: source .venv/bin/activate
-   python -m pip install --upgrade pip
-   pip install -r requirements.txt
-   alembic upgrade head
-   python -m app.db.seed
-   uvicorn app.main:app --reload
+   $env:MOITT_PYTHON = 'C:\Users\osama\Envs\agent\Scripts\python.exe'
+   & $env:MOITT_PYTHON -m pip install -r backend/requirements.txt
    ```
 
-4. In a second terminal, install and start the frontend:
+4. Install the frontend dependencies and run both services with one command:
 
    ```powershell
-   cd frontend
-   npm ci
-   npm run dev
+   npm --prefix frontend ci
+   $env:MOITT_PYTHON = 'C:\Users\osama\Envs\agent\Scripts\python.exe'; .\scripts\dev.ps1
    ```
 
-The API is at <http://localhost:8000>, OpenAPI docs at <http://localhost:8000/docs>, and the UI at <http://localhost:5173>.
+On macOS/Linux, use `python3 -m pip install -r backend/requirements.txt`, then `npm --prefix frontend ci`, then start both with `MOITT_PYTHON=python3 ./scripts/dev.sh`. On Windows the launcher opens separate backend and frontend log windows; on macOS/Linux both logs appear in the current terminal. The API is at <http://127.0.0.1:8000>, OpenAPI docs at <http://127.0.0.1:8000/docs>, and the UI at <http://127.0.0.1:5173>.
 
-On Windows, `scripts/run_backend.ps1` applies migrations and starts the API, `scripts/run_frontend.ps1` starts Vite, and `scripts/seed.ps1` creates missing demo records. On macOS/Linux, use the matching `.sh` scripts. The seed command is idempotent for an existing demo database; it does not reset or delete records. A clean setup downloads Python packages and npm packages, so allow network access during installation. The documented setup sequence is designed to complete in under 20 minutes on a supported machine with those runtimes installed.
+To run each service in the terminal you choose, run `scripts/run_backend.ps1` in one PowerShell terminal and `npm --prefix frontend run dev` in another. On macOS/Linux, use `scripts/run_backend.sh` and `cd frontend && npm run dev`. The backend launcher applies migrations, adds missing synthetic demo data, and starts FastAPI. The seed command is idempotent; it does not reset or delete existing records.
 
-If PowerShell blocks local activation scripts, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal, then activate `.venv` again. On macOS/Linux, replace the Windows activation command with the Bash command in the code comment.
+Run `python scripts/doctor.py` from the repository root for setup diagnostics. It prints only whether the provider key is configured, never its value.
 
-All eight fictional roles use the demo-only password `Demo-Only-Change-Me-2026!`. Their emails are `minister@demo.example`, `cos@demo.example`, `director.td@demo.example`, `liaison@demo.example`, `legal@demo.example`, `analyst@demo.example`, `data.coordinator@demo.example`, and `admin@demo.example`. Never reuse these credentials outside a local synthetic demo.
+The v2 synthetic users share the demo-only password `Demo-Only-Change-Me-2026!`: `minister@moitt.demo`, `secretary@moitt.demo`, `ps@moitt.demo`, `js.dev@moitt.demo`, `legal@moitt.demo`, `analyst@moitt.demo`, `records@moitt.demo`, `pseb.liaison@moitt.demo`, and `admin@moitt.demo`. Never reuse these credentials outside a local synthetic demo.
 
 ## Scripts
 
 - `scripts/run_backend.ps1` / `scripts/run_backend.sh`: apply migrations and run FastAPI.
 - `scripts/run_frontend.ps1` / `scripts/run_frontend.sh`: run Vite.
+- `scripts/dev.ps1` / `scripts/dev.sh`: run backend and frontend together with visible logs.
 - `scripts/seed.ps1` / `scripts/seed.sh`: seed the demo personas.
 - `backend/scripts/benchmark_register_1000.py`: benchmark the Register handler and serialization against an isolated synthetic SQLite dataset (up to 1,000 rows); this excludes HTTP and browser rendering.
 
