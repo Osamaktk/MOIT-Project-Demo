@@ -15,7 +15,7 @@ Phases 0-8 are accepted: Foundation, Decision & Action Register, Transactions an
 ## Run locally
 
 1. Install Python 3.11+ and Node.js 20.19+ or 22.12+. Confirm `python --version` and `node --version` work in a new terminal.
-2. From the repository root, copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell; `cp .env.example .env` in Bash). Replace `SECRET_KEY` with a private random value of at least 32 characters. The example selects OpenRouter and `nvidia/nemotron-3-super-120b-a12b:free` for extraction; add your key to `OPENROUTER_API_KEY` to draft meeting minutes live. The selected free route advertised JSON/structured-output support and zero token pricing in the OpenRouter catalogue on 2026-10-17. Verify the model ID from `backend/` with `python scripts/verify_openrouter_models.py`. Keep credentials in `.env` only.
+2. From the repository root, copy `.env.example` to `backend/.env` (`Copy-Item .env.example backend/.env` in PowerShell; `cp .env.example backend/.env` in Bash). Replace `SECRET_KEY` with a private random value of at least 32 characters. The example selects OpenRouter and `nvidia/nemotron-3-super-120b-a12b:free` for extraction; add your key to `OPENROUTER_API_KEY` to draft meeting minutes live. The selected free route advertised JSON/structured-output support and zero token pricing in the OpenRouter catalogue on 2026-10-17. Verify the model ID from `backend/` with `python scripts/verify_openrouter_models.py`. Keep credentials only in the ignored `backend/.env` file.
 3. Create and initialize the backend from the repository root:
 
    ```powershell
@@ -56,7 +56,7 @@ All eight fictional roles use the demo-only password `Demo-Only-Change-Me-2026!`
 
 ## Configuration and data
 
-Settings come from `.env`; see `.env.example`. Runtime data is written under `data/` and is ignored by Git. Do not place confidential or real office data in this demo.
+Settings come from the ignored `backend/.env`; create it from the root `.env.example`. Run `python scripts/doctor.py` from the repository root for setup checks; it prints only whether the provider key is configured, never its value. Runtime data is written under `data/` and is ignored by Git. Do not place confidential or real office data in this demo.
 
 The API attaches an `X-Request-ID` to each response and emits a JSON request log with the method, path, status, and duration; request bodies, query strings, passwords, and provider keys are not logged. Login requests are limited to 60 per client per minute and AI-heavy routes to 30 per client per minute. These in-memory limits suit the documented single-process local demo; use a shared limiter before multi-worker deployment.
 

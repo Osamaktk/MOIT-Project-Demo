@@ -1,5 +1,9 @@
 # Decisions
 
+- **2026-10-18 — Keep v2 backend credentials in `backend/.env`.** The file is ignored explicitly; `.env.example` stays credential-free. The model-catalogue check uses the public catalogue endpoint without sending the configured secret.
+- **2026-10-18 — Bind Vite to loopback by default.** Development and preview servers are local-only unless a developer deliberately overrides the host.
+- **2026-10-18 — Verify Linux frontend compatibility in CI.** This workstation has no usable WSL distribution, so the Ubuntu workflow runs a clean `npm ci` and production build after the Phase 0 commit is pushed.
+
 - **2026-10-17 — Preserve the supplied architecture as the project source.** The attached `ARCHITECTURE.md` is copied into this repository unchanged so implementation and review use a stable, versioned specification.
 - **2026-10-17 — Phase 0 is the initial delivery.** The workspace was empty, so implementation begins at the first phase and will not introduce later-phase product screens before the foundation is in place.
 - **2026-10-17 — Backend settings load `.env` from the repository root.** This keeps a single configuration file for both processes and makes paths independent of the shell's current working directory.

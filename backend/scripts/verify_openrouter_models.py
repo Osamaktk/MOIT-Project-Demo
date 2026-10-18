@@ -30,12 +30,10 @@ async def main() -> int:
     if not configured:
         print("No model identifiers are configured; model catalogue check skipped.")
         return 0
-    headers = {}
-    api_key = settings.openrouter_api_key.get_secret_value()
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    # The public catalogue endpoint does not need credentials. Keep this check
+    # independent of user secrets; it only verifies model identifiers.
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get(f"{settings.openrouter_base_url.rstrip('/')}/models", headers=headers)
+        response = await client.get(f"{settings.openrouter_base_url.rstrip('/')}/models")
         response.raise_for_status()
         payload = response.json()
     available = {row["id"] for row in payload.get("data", []) if isinstance(row, dict) and row.get("id")}

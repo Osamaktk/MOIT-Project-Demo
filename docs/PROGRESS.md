@@ -1,5 +1,21 @@
 # Build progress
 
+## MoITT Command Center v2 — current delivery
+
+### Phase 0 — Fix and stabilise (Linux CI verification pending)
+
+- [x] Remove the Windows-only Rolldown package from direct development dependencies and regenerate the npm lockfile with platform-specific optional packages preserved.
+- [x] Bind Vite development and preview servers to `127.0.0.1` by default.
+- [x] Repair the mojibake middle-dot text in frontend source; a repository scan found no U+00C2 or U+00C3 characters.
+- [x] Add `scripts/doctor.py` with version, private backend configuration, key-presence-only, model-catalogue, migration, seed, speech, and npm lockfile checks.
+- [x] Move backend settings to the ignored `backend/.env`; make model-catalogue verification use the public endpoint without sending a credential.
+- [x] Windows clean install and production build passed in an isolated copy: `npm ci` (0 vulnerabilities), `npm run build`.
+- [x] Backend suite passed: 56 tests. Doctor passed: 11/11 checks. Frontend production build passed in the workspace.
+- [x] Run the app and capture a login screenshot: [`docs/screenshots/phase-0/login.png`](screenshots/phase-0/login.png). A fresh Vite process served HTTP 200 on `127.0.0.1:5174`; its listener was loopback-only.
+- [ ] Linux `npm ci` and `npm run build` — CI workflow added; awaiting the first GitHub Actions run.
+
+Phase 0 remains open until the Linux workflow passes. Do not begin Phase 1 before then.
+
 ## Phase 0 — Foundation (accepted)
 
 - [x] Initial repository structure and source architecture copy.

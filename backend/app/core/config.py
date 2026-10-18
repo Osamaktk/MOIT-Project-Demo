@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=REPO_ROOT / ".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=REPO_ROOT / "backend" / ".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "demo"
     secret_key: SecretStr = SecretStr("local-development-only-change-this-key")
